@@ -1,0 +1,57 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect SplashMe",
+        "description": "Sign in once: devices paired to your account that are on this network are added and controlled locally. The cloud is not used afterwards."
+      },
+      "pick_implementation": {
+        "title": "Connect SplashMe"
+      },
+      "zeroconf_confirm": {
+        "title": "SplashMe device found",
+        "description": "Add {name} at {host} to Home Assistant?"
+      },
+      "reauth_confirm": {
+        "title": "Reconnect SplashMe",
+        "description": "Your SplashMe authorization has expired. Continue to sign in again."
+      },
+      "scan_done": {
+        "title": "Local network scan",
+        "description": "Found {found_count} of {paired_count} paired device(s) on this network.\n\nFound: {found}\nNot found: {missing}\n\nA device that was not found must be powered on and on the same network as Home Assistant. Scan again once it is, or finish now: it is added automatically the next time it is seen.",
+        "menu_options": {
+          "finish": "Finish",
+          "rescan": "Scan again"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]"
+    },
+    "abort": {
+      "no_mac": "The discovered device did not announce its MAC address.",
+      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+      "already_configured": "[%key:common::config_flow::abort::already_configured_account%]",
+      "already_in_progress": "[%key:common::config_flow::abort::already_in_progress%]",
+      "oauth_error": "[%key:common::config_flow::abort::oauth2_error%]",
+      "oauth_failed": "[%key:common::config_flow::abort::oauth2_failed%]",
+      "oauth_implementation_unavailable": "[%key:common::config_flow::abort::oauth2_implementation_unavailable%]",
+      "oauth_timeout": "[%key:common::config_flow::abort::oauth2_timeout%]",
+      "oauth_unauthorized": "[%key:common::config_flow::abort::oauth2_unauthorized%]",
+      "missing_configuration": "[%key:common::config_flow::abort::oauth2_missing_configuration%]",
+      "authorize_url_timeout": "[%key:common::config_flow::abort::oauth2_authorize_url_timeout%]",
+      "no_url_available": "[%key:common::config_flow::abort::oauth2_no_url_available%]",
+      "user_rejected_authorize": "[%key:common::config_flow::abort::oauth2_user_rejected_authorize%]",
+      "wrong_account": "The authenticated SplashMe account does not match the existing entry.",
+      "not_device_owner": "Your SplashMe account is not paired with this device, so its key cannot be fetched.",
+      "key_fetch_failed": "Could not fetch or verify the device key.",
+      "not_paired": "This device is not paired with your SplashMe account, so it cannot be added."
+    },
+    "create_entry": {
+      "default": "Signed in. Devices found on this network have been added."
+    },
+    "progress": {
+      "scan_lan": "Scanning the local network for {paired_count} paired device(s). This takes a few seconds…"
+    }
+  }
+}

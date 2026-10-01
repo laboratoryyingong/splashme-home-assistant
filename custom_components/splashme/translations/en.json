@@ -1,0 +1,57 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "Account is already configured",
+      "already_in_progress": "This is already being configured. Finish the existing configuration before starting again.",
+      "authorize_url_timeout": "Timeout while generating an authorization URL.",
+      "missing_configuration": "The component is not configured. Please follow the documentation.",
+      "no_url_available": "No URL available. For information about this error, [check the help section]({docs_url})",
+      "oauth_error": "Received invalid token data.",
+      "oauth_failed": "Error while obtaining access token.",
+      "oauth_implementation_unavailable": "No OAuth2 implementations are currently available.",
+      "oauth_timeout": "Timeout while resolving the OAuth token.",
+      "oauth_unauthorized": "OAuth authorization error while obtaining access token.",
+      "user_rejected_authorize": "Account linking rejected: {error}",
+      "wrong_account": "The authenticated SplashMe account does not match the existing entry.",
+      "no_mac": "The discovered device did not announce its MAC address.",
+      "cannot_connect": "Failed to connect to the device.",
+      "not_device_owner": "Your SplashMe account is not paired with this device, so its key cannot be fetched.",
+      "key_fetch_failed": "Could not fetch or verify the device key.",
+      "not_paired": "This device is not paired with your SplashMe account, so it cannot be added."
+    },
+    "create_entry": {
+      "default": "Signed in. Devices found on this network have been added."
+    },
+    "step": {
+      "pick_implementation": {
+        "title": "Connect SplashMe"
+      },
+      "reauth_confirm": {
+        "description": "Your SplashMe authorization has expired. Continue to sign in again.",
+        "title": "Reconnect SplashMe"
+      },
+      "user": {
+        "title": "Connect SplashMe",
+        "description": "Sign in once: devices paired to your account that are on this network are added and controlled locally. The cloud is not used afterwards."
+      },
+      "zeroconf_confirm": {
+        "title": "SplashMe device found",
+        "description": "Add {name} at {host} to Home Assistant?"
+      },
+      "scan_done": {
+        "title": "Local network scan",
+        "description": "Found {found_count} of {paired_count} paired device(s) on this network.\n\nFound: {found}\nNot found: {missing}\n\nA device that was not found must be powered on and on the same network as Home Assistant. Scan again once it is, or finish now: it is added automatically the next time it is seen.",
+        "menu_options": {
+          "finish": "Finish",
+          "rescan": "Scan again"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the device. Check the IP address and that both are on the same network."
+    },
+    "progress": {
+      "scan_lan": "Scanning the local network for {paired_count} paired device(s). This takes a few seconds…"
+    }
+  }
+}

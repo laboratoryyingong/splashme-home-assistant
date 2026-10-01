@@ -1,0 +1,154 @@
+create_schedule:
+  name: Create schedule
+  description: Create a new pool schedule on a SplashMe device.
+  fields:
+    device_id:
+      name: Device ID
+      description: The SplashMe device id (serial), e.g. A1_B2_C3_D4_E5_F6.
+      required: true
+      example: "A1_B2_C3_D4_E5_F6"
+      selector:
+        text:
+    start_time:
+      name: Start time
+      description: Minutes since midnight (0-1439). 8:00 = 480.
+      required: true
+      example: 480
+      selector:
+        number:
+          min: 0
+          max: 1439
+          mode: box
+    end_time:
+      name: End time
+      description: Minutes since midnight (0-1439). 18:00 = 1080.
+      required: true
+      example: 1080
+      selector:
+        number:
+          min: 0
+          max: 1439
+          mode: box
+    day_of_week:
+      name: Days
+      description: 7 booleans, Monday..Sunday.
+      required: true
+      example: "[true, true, true, true, true, false, false]"
+      selector:
+        object:
+    schedule_name:
+      name: Name
+      description: Optional schedule label.
+      example: "Morning filtration"
+      selector:
+        text:
+    aux_slot:
+      name: Aux slot
+      description: Slot number this schedule controls (omit for the main pump).
+      selector:
+        number:
+          min: 0
+          max: 60
+          mode: box
+    pump_speed:
+      name: Pump speed
+      description: Speed for a variable speed pump (40-100%).
+      selector:
+        number:
+          min: 40
+          max: 100
+          mode: slider
+    pool_volume:
+      name: Pool volume
+      description: Optional pool volume for turnover-based scheduling.
+      selector:
+        number:
+          mode: box
+
+update_schedule:
+  name: Update schedule
+  description: Update an existing pool schedule.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+      example: "A1_B2_C3_D4_E5_F6"
+      selector:
+        text:
+    schedule_num:
+      name: Schedule number
+      description: The schedule_num attribute of the schedule switch to update.
+      required: true
+      example: 2
+      selector:
+        number:
+          min: 0
+          max: 20
+          mode: box
+    start_time:
+      name: Start time
+      required: true
+      example: 480
+      selector:
+        number:
+          min: 0
+          max: 1439
+          mode: box
+    end_time:
+      name: End time
+      required: true
+      example: 1080
+      selector:
+        number:
+          min: 0
+          max: 1439
+          mode: box
+    day_of_week:
+      name: Days
+      required: true
+      example: "[true, true, true, true, true, false, false]"
+      selector:
+        object:
+    schedule_name:
+      name: Name
+      selector:
+        text:
+    aux_slot:
+      name: Aux slot
+      selector:
+        number:
+          min: 0
+          max: 60
+          mode: box
+    pump_speed:
+      name: Pump speed
+      selector:
+        number:
+          min: 40
+          max: 100
+          mode: slider
+    pool_volume:
+      name: Pool volume
+      selector:
+        number:
+          mode: box
+
+delete_schedule:
+  name: Delete schedule
+  description: Delete a pool schedule.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+      example: "A1_B2_C3_D4_E5_F6"
+      selector:
+        text:
+    schedule_num:
+      name: Schedule number
+      required: true
+      example: 2
+      selector:
+        number:
+          min: 0
+          max: 20
+          mode: box

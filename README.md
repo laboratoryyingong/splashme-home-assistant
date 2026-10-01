@@ -57,7 +57,7 @@ home.
 
 - Home Assistant 2025.1 or newer.
 - A SplashMe account with at least one paired controller.
-- Controller firmware **2.5.41 or newer** (see the early access note above).
+- Controller firmware **2.5.45 or newer** (see the early access note above).
 - The controller and Home Assistant on the same local network. The controller
   announces itself with mDNS; it must be reachable on TCP port 8080.
 

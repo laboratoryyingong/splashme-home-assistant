@@ -94,6 +94,30 @@ Signing in is needed once. The SplashMe cloud is only used during setup to
 confirm which controllers belong to you; afterwards the integration talks to
 the controller directly.
 
+## Troubleshooting
+
+**After signing in, the browser lands on a page that cannot be reached
+(for example `localhost:8123/auth/external/callback?...`).**
+The sign-in page hands you back to Home Assistant through
+my.home-assistant.io, which uses the Home Assistant address saved in your
+browser. Open <https://my.home-assistant.io/>, set the Home Assistant URL to
+the address you normally use (such as `http://homeassistant.local:8123` or
+your Home Assistant's IP address with port 8123), save, then add the
+integration again. To rescue the current attempt instead, edit the address
+in the browser bar: replace the host with your Home Assistant address and
+keep everything after `/auth/external/callback` unchanged.
+
+**The scan finds 0 of N paired devices.**
+The controller must be powered on, on the same network as Home Assistant,
+and running firmware 2.5.45 or newer. Multicast DNS must be able to cross
+between Home Assistant and the controller, so a Wi-Fi guest network or VLAN
+in between will block discovery. Choose **Scan again** once fixed, or finish:
+the controller is added automatically the next time it is seen.
+
+**"Your SplashMe account is not paired with this device".**
+Only controllers paired to the account you signed in with can be added.
+Sign in with the account that owns the controller in the SplashMe app.
+
 ## Getting help
 
 - Something not working: open an

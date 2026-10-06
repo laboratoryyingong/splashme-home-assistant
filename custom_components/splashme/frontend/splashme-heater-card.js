@@ -194,10 +194,13 @@ class SplashmeHeaterCard extends HTMLElement {
       .map((t, i) => `<button data-index="${i}" class="${i === this._tab ? "active" : ""}">${t.title || `Tab ${i + 1}`}</button>`)
       .join("");
 
+    // HA converts temperature entities to the instance's unit system, so show the
+    // unit the state actually carries instead of assuming °C.
+    const unitOf = (st) => (st && st.attributes && st.attributes.unit_of_measurement) || "°C";
     const fmt = (entityId) => {
       const st = this._state(entityId);
       const v = st ? parseFloat(st.state) : NaN;
-      return Number.isFinite(v) ? `${v.toFixed(1)}°` : "--°";
+      return Number.isFinite(v) ? `${v.toFixed(1)}${unitOf(st)}` : "--°";
     };
     root.querySelector(".ambient b").textContent = fmt(tab.ambient_entity || cfg.ambient_entity);
     root.querySelector(".water b").textContent = fmt(tab.water_entity || cfg.water_entity);
@@ -226,7 +229,7 @@ class SplashmeHeaterCard extends HTMLElement {
     const knobEl = root.querySelector(".knob");
     knobEl.setAttribute("cx", knob.x);
     knobEl.setAttribute("cy", knob.y);
-    root.querySelector(".value").textContent = available ? `${target} °C` : "--";
+    root.querySelector(".value").textContent = available ? `${target} ${unitOf(this._state(tab.target_entity))}` : "--";
     root.querySelector(".label").textContent = tab.label || `Set ${tab.title || ""} Temperature`.replace("  ", " ");
     const note = root.querySelector(".note");
     note.hidden = available;

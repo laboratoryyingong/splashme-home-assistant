@@ -36,3 +36,10 @@ For example, if a tester finds:
 3. a dashboard usability suggestion,
 
 these should normally be submitted as three separate GitHub issues.
+
+## Issue template notes
+
+- `blank_issues_enabled: false` forces users to choose one of the provided templates.
+- The Support link in `config.yml` currently points to `https://www.splashmepool.com.au/`.
+- You can replace that URL with a dedicated SplashMe support page or email/contact page later.
+- GitHub labels referenced by the templates (`bug` and `enhancement`) should exist in the repository.

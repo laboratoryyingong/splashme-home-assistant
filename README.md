@@ -125,3 +125,11 @@ Sign in with the account that owns the controller in the SplashMe app.
   and attach the diagnostics file (**Settings → Devices & services →
   SplashMe → three-dot menu → Download diagnostics**).
 - Firmware upgrades and account questions: support@splashmepool.com.au.
+
+## Notes
+
+- `blank_issues_enabled: false` forces users to choose one of the provided templates.
+- The Support link in `config.yml` currently points to `https://www.splashmepool.com.au/`.
+- You can replace that URL with a dedicated SplashMe support page or email/contact page later.
+- GitHub labels referenced by the templates (`bug` and `enhancement`) should exist in the repository.
+

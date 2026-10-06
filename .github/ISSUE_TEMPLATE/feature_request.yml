@@ -1,0 +1,79 @@
+name: Feature / Enhancement Request
+description: Suggest an improvement or new feature for the SplashMe Home Assistant integration
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping us improve the SplashMe Home Assistant integration.
+
+        Please describe the feature, usability improvement, or enhancement you would like to see.
+
+  - type: textarea
+    id: feature
+    attributes:
+      label: Feature or Improvement
+      description: What would you like the SplashMe integration to do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Use Case
+      description: What are you trying to achieve, and why would this be useful?
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or Limitation
+      description: Is this request related to a current problem, limitation, or usability issue?
+
+  - type: textarea
+    id: proposed_solution
+    attributes:
+      label: Proposed Solution
+      description: How would you like this feature to work?
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or Workarounds
+      description: Are you currently using another method or workaround to achieve the same result?
+
+  - type: textarea
+    id: examples
+    attributes:
+      label: Examples
+      description: |
+        If useful, provide screenshots, automation examples, entity examples, or examples from other Home Assistant integrations.
+
+  - type: input
+    id: integration_version
+    attributes:
+      label: SplashMe Integration Version
+      placeholder: "e.g. 0.1.2"
+
+  - type: input
+    id: home_assistant_version
+    attributes:
+      label: Home Assistant Version
+      placeholder: "e.g. 2026.10.1"
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional Information
+      description: Add any other information that may help us understand the request.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission Checklist
+      options:
+        - label: I have checked that a similar feature request has not already been submitted.
+          required: true

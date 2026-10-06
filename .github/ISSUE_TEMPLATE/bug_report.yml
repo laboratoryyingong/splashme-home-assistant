@@ -1,0 +1,193 @@
+name: Bug Report
+description: Report a problem with the SplashMe Home Assistant integration
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping us improve the SplashMe Home Assistant integration.
+
+        Before submitting a bug:
+        - Make sure you are running the latest available version of the SplashMe integration.
+        - Check existing issues to avoid duplicates.
+        - Remove passwords, access tokens, API keys, and other sensitive information from logs, diagnostics, and screenshots.
+
+  - type: input
+    id: integration_version
+    attributes:
+      label: SplashMe Integration Version
+      description: What version of the SplashMe Home Assistant integration are you using?
+      placeholder: "e.g. 0.1.2"
+    validations:
+      required: true
+
+  - type: input
+    id: home_assistant_version
+    attributes:
+      label: Home Assistant Version
+      description: What version of Home Assistant are you running?
+      placeholder: "e.g. 2026.10.1"
+    validations:
+      required: true
+
+  - type: input
+    id: firmware_version
+    attributes:
+      label: SplashMe Controller Firmware Version
+      description: What firmware version is installed on your SplashMe controller?
+      placeholder: "e.g. 2.5.46"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: installation_type
+    attributes:
+      label: Home Assistant Installation Type
+      options:
+        - Home Assistant OS
+        - Home Assistant Container
+        - Home Assistant Supervised
+        - Home Assistant Core
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: connection_type
+    attributes:
+      label: Controller Connection Type
+      options:
+        - Wi-Fi
+        - Ethernet
+        - Unknown
+    validations:
+      required: false
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Describe the Problem
+      description: Please clearly describe what went wrong.
+      placeholder: |
+        Describe what you observed and what you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Please provide the steps required to reproduce the issue.
+      placeholder: |
+        1. Open Home Assistant
+        2. Go to ...
+        3. Change ...
+        4. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behaviour
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behaviour
+      description: What actually happened?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: reproducible
+    attributes:
+      label: Is the Issue Reproducible?
+      options:
+        - Always
+        - Sometimes
+        - Happened once
+        - Unable to reproduce
+    validations:
+      required: true
+
+  - type: input
+    id: timestamp
+    attributes:
+      label: Approximate Time of the Issue
+      description: If possible, provide the approximate date, time, and timezone when the issue occurred.
+      placeholder: "e.g. 7 Oct 2026, 9:30 AM ACDT"
+
+  - type: input
+    id: device_id
+    attributes:
+      label: SplashMe Controller Device ID
+      description: Please provide the controller Device ID if known. Do not provide passwords, API keys, access tokens, or credentials.
+      placeholder: "Controller Device ID"
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Home Assistant Diagnostics
+      description: |
+        Please attach the "Download Diagnostics" file from the SplashMe integration if available.
+
+        In Home Assistant:
+        Settings → Devices & Services → SplashMe → Device → Download Diagnostics
+
+        Please review the file and remove any sensitive information before uploading it.
+      placeholder: "Drag and drop the diagnostics file here."
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs
+      description: |
+        Paste any relevant Home Assistant logs here.
+
+        Remove passwords, tokens, API keys, and other sensitive information.
+      render: shell
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: |
+        If applicable, drag and drop screenshots here.
+
+        Screenshots are particularly useful for dashboard, entity, state, and UI issues.
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Workaround
+      description: If you found a workaround, please describe it here.
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional Information
+      description: |
+        Add anything else that may help us understand or reproduce the issue.
+
+        Examples:
+        - Whether restarting Home Assistant changes the behaviour
+        - Whether reloading the integration resolves the issue
+        - Whether the problem started after an integration or firmware update
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission Checklist
+      options:
+        - label: I have checked that this issue has not already been reported.
+          required: true
+        - label: I am using the latest available SplashMe Home Assistant integration version.
+          required: true
+        - label: I have removed passwords, API keys, access tokens, and other sensitive information from my submission.
+          required: true

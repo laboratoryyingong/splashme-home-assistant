@@ -357,7 +357,8 @@ class SplashMeLanData:
             (a.slot, a.type_code, a.name, self.light_type(a.slot) if a.is_light else None)
             for a in self.aux
         )
-        return (pump, slots)
+        schedules = tuple((s.index, s.name) for s in self.schedules if s.defined)
+        return (pump, slots, schedules)
 
     def schedule_by_index(self, index: int) -> pv2.Schedule | None:
         """Return the schedule with the given index."""

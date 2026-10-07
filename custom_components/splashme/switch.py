@@ -184,21 +184,18 @@ async def _async_setup_lan_switches(hass, entry, async_add_entities) -> None:
     )
     await spa.async_sync()
     entry.runtime_data.slot_entities.append(spa)
-    known: set[int] = set()
 
-    @callback
-    def _async_add_schedule_switches() -> None:
-        new = [
-            SplashMeLanScheduleSwitch(coordinator, entry, sched.index)
-            for sched in coordinator.data.schedules
-            if _lan_schedule_defined(sched) and sched.index not in known
-        ]
-        known.update(sw._index for sw in new)  # noqa: SLF001
-        if new:
-            async_add_entities(new)
-
-    entry.async_on_unload(coordinator.async_add_listener(_async_add_schedule_switches))
-    _async_add_schedule_switches()
+    # One switch per defined schedule; deleted ones leave the registry.
+    schedules = SplashMeLanSlotEntities(
+        hass,
+        entry,
+        coordinator,
+        "schedule_",
+        lambda data: {f"schedule_{s.index}": s.index for s in data.schedules if s.defined},
+        lambda index: SplashMeLanScheduleSwitch(coordinator, entry, index),
+    )
+    await schedules.async_sync()
+    entry.runtime_data.slot_entities.append(schedules)
 
 
 class SplashMeAuxSwitch(SplashMeDeviceEntity, SwitchEntity):
@@ -706,12 +703,13 @@ class SplashMeLanScheduleSwitch(SplashMeLanEntity, SwitchEntity):
         super().__init__(coordinator, entry)
         self._index = index
         self._attr_unique_id = f"{self.unique_id_base}_schedule_{index}"
-        self._attr_name = self._schedule_name()
 
     def _schedule(self):
         return self.coordinator.data.schedule_by_index(self._index)
 
-    def _schedule_name(self) -> str:
+    @property
+    def name(self) -> str:
+        """Follow the schedule's current name (slots get reused)."""
         sched = self._schedule()
         name = sched.name if sched else ""
         return f"Schedule {self._index + 1}" + (f" {name}" if name else "")
@@ -720,7 +718,7 @@ class SplashMeLanScheduleSwitch(SplashMeLanEntity, SwitchEntity):
     def available(self) -> bool:
         """Only schedules that are actually defined get a live switch."""
         sched = self._schedule()
-        return super().available and sched is not None and _lan_schedule_defined(sched)
+        return super().available and sched is not None and sched.defined
 
     @property
     def is_on(self) -> bool:
@@ -757,11 +755,6 @@ class SplashMeLanScheduleSwitch(SplashMeLanEntity, SwitchEntity):
         """Disable the schedule."""
         del kwargs
         await self.coordinator.async_set_schedule_enabled(self._index, False)
-
-
-def _lan_schedule_defined(sched) -> bool:
-    """The device reports 20 fixed records; unused ones carry aux_slot 99."""
-    return sched.aux_slot != 99
 
 
 def _minutes_to_hhmm(value) -> str | None:

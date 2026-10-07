@@ -562,6 +562,11 @@ class Schedule:
     name: str
 
     @property
+    def defined(self) -> bool:
+        """The device reports 20 fixed records; unused ones carry aux_slot 99."""
+        return self.aux_slot != 99
+
+    @property
     def fields(self) -> ScheduleFields:
         """Return the record as UPDATE fields."""
         return ScheduleFields(

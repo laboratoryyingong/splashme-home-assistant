@@ -183,6 +183,7 @@ class SplashmeChemistryCard extends SplashmeCardBase {
           <line class="target" stroke-width="3"></line>
           <text class="caption" x="60" y="52">target</text>
           <text class="value" x="60" y="72">--</text>
+          <text class="caption last" x="60" y="99" visibility="hidden">last reading</text>
           <circle class="reading-mark" r="6"></circle>
           <text class="reading" x="60" y="112">--</text>
         </svg>
@@ -245,6 +246,7 @@ class SplashmeChemistryCard extends SplashmeCardBase {
     const { text, cls } = chemistryStatus(this._state(cfg.stable_entity), this._state(cfg.pump_entity));
     status.textContent = text;
     status.className = `status ${cls}`;
+    const held = cls === "held";
 
     this._gauge("orp", {
       name: "ORP",
@@ -259,6 +261,7 @@ class SplashmeChemistryCard extends SplashmeCardBase {
       dosing_entity: cfg.orp_dosing_entity,
       enable_entity: cfg.orp_enable_entity,
       hidden: !cfg.orp_entity,
+      held,
     });
     this._gauge("ph", {
       name: "pH",
@@ -273,6 +276,7 @@ class SplashmeChemistryCard extends SplashmeCardBase {
       dosing_entity: cfg.ph_dosing_entity,
       enable_entity: cfg.ph_enable_entity,
       hidden: !cfg.ph_entity,
+      held,
     });
   }
 
@@ -297,6 +301,8 @@ class SplashmeChemistryCard extends SplashmeCardBase {
     const reading = el.querySelector(".reading");
     const hide = (node) => node.setAttribute("visibility", "hidden");
     const show = (node) => node.removeAttribute("visibility");
+    // Not stable: the number is the reading from when the pump last ran.
+    (g.held && g.value != null ? show : hide)(el.querySelector(".last"));
     if (g.value == null || g.target == null) {
       fill.setAttribute("d", "");
       hide(tick); hide(mark);

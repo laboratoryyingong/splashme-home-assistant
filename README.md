@@ -131,7 +131,8 @@ The target temperature dial appears when the heater's output is set up as
 Pool Heater, Spa Heater or Solar in the SplashMe app: the controller then runs
 it to the target temperature. A heater on a general auxiliary output is only
 switched on and off. Give that output a name containing "heat" (such as "Heat
-Pump") and the dashboard shows its switch under Heating.
+Pump"), in the SplashMe app or by renaming its switch in Home Assistant, and
+the dashboard shows its switch under Heating.
 
 **The Pool dashboard doesn't pick up changes.**
 Once you edit the Pool dashboard, the integration leaves it alone, so new

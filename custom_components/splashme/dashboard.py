@@ -41,6 +41,7 @@ from .lan import (
     POOL_HEATER_TYPE_CODES,
     SOLAR_TYPE_CODES,
     SPA_HEATER_TYPE_CODES,
+    SplashMeLanAux,
     SplashMeLanCoordinator,
     SplashMeLanData,
     lan_device_identifier,
@@ -149,11 +150,12 @@ async def async_remove_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> Non
 def async_track_renames(
     hass: HomeAssistant, entry: ConfigEntry, coordinator: SplashMeLanCoordinator
 ) -> None:
-    """Rebuild the dashboard when the user renames the device or its entity IDs.
+    """Rebuild the dashboard when the user renames the device or its entities.
 
-    The layout stores entity IDs, so without this it would point at IDs that no
-    longer exist until the integration reloads. A dashboard the user edited is
-    still left alone by async_register_dashboard.
+    The layout stores entity IDs and names (a name with "heat" also puts an output
+    under Heating), so without this it would point at IDs that no longer exist,
+    or show old names, until the integration reloads. A dashboard the user
+    edited is still left alone by async_register_dashboard.
     """
     identifier = (DOMAIN, lan_device_identifier(entry))
     cancel: CALLBACK_TYPE | None = None
@@ -173,7 +175,7 @@ def async_track_renames(
 
     @callback
     def _entity_renamed(data: er.EventEntityRegistryUpdatedData) -> bool:
-        if data["action"] != "update" or "old_entity_id" not in data:
+        if data["action"] != "update" or ("old_entity_id" not in data and "name" not in data["changes"]):
             return False
         ent = er.async_get(hass).async_get(data["entity_id"])
         return ent is not None and ent.config_entry_id == entry.entry_id
@@ -204,13 +206,13 @@ def async_track_renames(
 # ---------------------------------------------------------------------------
 
 
-def _entity_map(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, str]:
-    """Map unique-id key (after the device prefix) -> entity_id."""
+def _registry_entries(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, er.RegistryEntry]:
+    """Map unique-id key (after the device prefix) -> entity registry entry."""
     prefix = f"{lan_device_identifier(entry)}_"
-    out: dict[str, str] = {}
+    out: dict[str, er.RegistryEntry] = {}
     for ent in er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id):
         if ent.unique_id.startswith(prefix):
-            out[ent.unique_id[len(prefix) :]] = ent.entity_id
+            out[ent.unique_id[len(prefix) :]] = ent
     return out
 
 
@@ -234,8 +236,15 @@ def build_dashboard_config(
     hass: HomeAssistant, entry: ConfigEntry, coordinator: SplashMeLanCoordinator
 ) -> dict[str, Any]:
     """Generate the sections layout from the device's current entities."""
-    ent = _entity_map(hass, entry)
+    entries = _registry_entries(hass, entry)
+    ent = {key: e.entity_id for key, e in entries.items()}
     data = coordinator.data
+
+    def aux_name(a: SplashMeLanAux, key: str) -> str:
+        """An output's name: the one given to its entity in Home Assistant, else the controller's."""
+        reg = entries.get(key)
+        return (reg.name if reg is not None else None) or a.display_name
+
     # Dosing and heating state entities exist whatever is fitted: only show those
     # of equipment assigned to an output.
     unfitted = _unfitted(data)
@@ -247,7 +256,7 @@ def build_dashboard_config(
     aux_heaters = [
         a for a in aux
         if a is not pump and not a.is_pump_linked and f"aux_{a.slot}" in ent
-        and "heat" in a.display_name.lower()
+        and "heat" in aux_name(a, f"aux_{a.slot}").lower()
     ]
 
     def tiles(*specs: tuple[str, str | None]) -> list[dict[str, Any]]:
@@ -295,7 +304,7 @@ def build_dashboard_config(
     else:
         # The heater card shows these otherwise.
         heating = tiles(("water_temp", "Water Temperature"), ("solar_temp", "Ambient Temperature"))
-    heating += [_toggle_tile(ent[f"aux_{a.slot}"], a.display_name) for a in aux_heaters]
+    heating += [_toggle_tile(ent[f"aux_{a.slot}"], aux_name(a, f"aux_{a.slot}")) for a in aux_heaters]
     if heating:
         if heating_tabs or aux_heaters:
             heading = _heading("Heating", "mdi:fire")
@@ -356,16 +365,16 @@ def build_dashboard_config(
     equipment += tiles(("pump_cooldown", "Heater Cooldown"), ("pump_cooldown_left", "Cooldown Remaining"))
     for a in aux:
         if a.is_light and f"light_{a.slot}" in ent:
-            equipment.append(_toggle_tile(ent[f"light_{a.slot}"], a.display_name))
+            equipment.append(_toggle_tile(ent[f"light_{a.slot}"], aux_name(a, f"light_{a.slot}")))
     for a in aux:
         if (a is not pump and not a.is_light and not a.is_pump_linked and a not in aux_heaters
                 and f"aux_{a.slot}" in ent):
-            equipment.append(_toggle_tile(ent[f"aux_{a.slot}"], a.display_name))
+            equipment.append(_toggle_tile(ent[f"aux_{a.slot}"], aux_name(a, f"aux_{a.slot}")))
     linked = [a for a in aux if a.is_pump_linked and f"aux_{a.slot}" in ent]
     if linked:
         equipment.append(_heading("Runs With The Pump", "mdi:link-variant"))
         equipment += [
-            _toggle_tile(ent[f"aux_{a.slot}"], a.display_name, icon="mdi:link-variant") for a in linked
+            _toggle_tile(ent[f"aux_{a.slot}"], aux_name(a, f"aux_{a.slot}"), icon="mdi:link-variant") for a in linked
         ]
     if "actual_pump_speed" in ent or "actual_flow_rate" in ent:
         equipment = [
@@ -375,7 +384,7 @@ def build_dashboard_config(
                 "pressure_entity": "actual_pressure", "type_entity": "pump_brand",
                 "mode_entity": "pump_mode",
                 "pump_entity": f"aux_{pump.slot}" if pump is not None else None,
-            }) | {"linked": [{"name": a.display_name, "entity": ent[f"aux_{a.slot}"]} for a in linked]},
+            }) | {"linked": [{"name": aux_name(a, f"aux_{a.slot}"), "entity": ent[f"aux_{a.slot}"]} for a in linked]},
             *equipment,
         ]
     # -- Trends (history graphs on their own view, apart from the controls) --

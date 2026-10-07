@@ -9,6 +9,7 @@ alone (the generated version is recognised by its hash).
 
 from __future__ import annotations
 
+from datetime import datetime
 import hashlib
 import json
 import logging
@@ -27,8 +28,9 @@ from homeassistant.components.lovelace.const import (
 from homeassistant.components.lovelace.dashboard import ConfigNotFound, LovelaceStorage
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ICON, CONF_ID, CONF_MODE
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry as er
+from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
+from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers.event import async_call_later
 
 from .const import CONF_DEVICE_ID, CONF_MAC, DOMAIN
 from .lan import (
@@ -43,6 +45,8 @@ _LOGGER = logging.getLogger(__name__)
 
 OPT_DASHBOARD_HASH = "dashboard_generated_hash"
 DASHBOARD_ICON = "mdi:pool"
+# Renaming the device renames all its entity IDs in a burst: rebuild once after it.
+RENAME_REBUILD_DELAY = 2  # seconds
 
 
 def _short_id(entry: ConfigEntry) -> str:
@@ -55,8 +59,11 @@ def dashboard_url_path(entry: ConfigEntry) -> str:
     return f"splashme-{_short_id(entry)}"
 
 
-def _device_label(entry: ConfigEntry) -> str:
-    """The device name as the app shows it, e.g. SplashMe_24DCC32B9888."""
+def _device_label(hass: HomeAssistant, entry: ConfigEntry) -> str:
+    """The name the user gave the device in HA, else as the app shows it, e.g. SplashMe_24DCC32B9888."""
+    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, lan_device_identifier(entry))})
+    if device is not None and device.name_by_user:
+        return device.name_by_user
     device_id = entry.data.get(CONF_DEVICE_ID) or ""
     return f"SplashMe_{device_id.replace('_', '')}" if device_id else entry.title
 
@@ -127,6 +134,60 @@ async def async_remove_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> Non
         storage = LovelaceStorage(hass, item)
     await storage.async_delete()
     _LOGGER.info("Dashboard /%s removed with %s", url_path, entry.title)
+
+
+@callback
+def async_track_renames(
+    hass: HomeAssistant, entry: ConfigEntry, coordinator: SplashMeLanCoordinator
+) -> None:
+    """Rebuild the dashboard when the user renames the device or its entity IDs.
+
+    The layout stores entity IDs, so without this it would point at IDs that no
+    longer exist until the integration reloads. A dashboard the user edited is
+    still left alone by async_register_dashboard.
+    """
+    identifier = (DOMAIN, lan_device_identifier(entry))
+    cancel: CALLBACK_TYPE | None = None
+
+    @callback
+    def _rebuild(_now: datetime) -> None:
+        nonlocal cancel
+        cancel = None
+        entry.async_create_task(hass, async_register_dashboard(hass, entry, coordinator))
+
+    @callback
+    def _schedule(_event: Event) -> None:
+        nonlocal cancel
+        if cancel is not None:
+            cancel()
+        cancel = async_call_later(hass, RENAME_REBUILD_DELAY, _rebuild)
+
+    @callback
+    def _entity_renamed(data: er.EventEntityRegistryUpdatedData) -> bool:
+        if data["action"] != "update" or "old_entity_id" not in data:
+            return False
+        ent = er.async_get(hass).async_get(data["entity_id"])
+        return ent is not None and ent.config_entry_id == entry.entry_id
+
+    @callback
+    def _device_renamed(data: dr.EventDeviceRegistryUpdatedData) -> bool:
+        if data["action"] != "update" or "name_by_user" not in data["changes"]:
+            return False
+        device = dr.async_get(hass).async_get(data["device_id"])
+        return device is not None and identifier in device.identifiers
+
+    @callback
+    def _cancel() -> None:
+        if cancel is not None:
+            cancel()
+
+    entry.async_on_unload(
+        hass.bus.async_listen(er.EVENT_ENTITY_REGISTRY_UPDATED, _schedule, event_filter=_entity_renamed)
+    )
+    entry.async_on_unload(
+        hass.bus.async_listen(dr.EVENT_DEVICE_REGISTRY_UPDATED, _schedule, event_filter=_device_renamed)
+    )
+    entry.async_on_unload(_cancel)
 
 
 # ---------------------------------------------------------------------------
@@ -313,11 +374,12 @@ def build_dashboard_config(
     ]
     history_section: list[dict[str, Any]] = [_heading("History", "mdi:chart-line"), *[g for g in graphs if g]]
 
+    title = _device_label(hass, entry)
     return {
-        "title": _device_label(entry),
+        "title": title,
         "views": [
             {
-                "title": _device_label(entry),
+                "title": title,
                 "path": "pool",
                 "type": "sections",
                 "max_columns": 3,

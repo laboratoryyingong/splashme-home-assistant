@@ -43,7 +43,7 @@ from .const import (
     PLATFORMS,
     PLATFORMS_LAN,
 )
-from .dashboard import async_register_dashboard, async_remove_dashboard
+from .dashboard import async_register_dashboard, async_remove_dashboard, async_track_renames
 from .coordinator import SplashMeDataCoordinator, SplashMeDevice
 from .lan import SplashMeLanClient, SplashMeLanCoordinator
 from .slots import SplashMeLanSlotEntities, async_track_equipment
@@ -164,6 +164,7 @@ async def _async_setup_lan_entry(
     entry.runtime_data = SplashMeLanRuntimeData(client=client, coordinator=coordinator)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS_LAN)
     await async_register_dashboard(hass, entry, coordinator)
+    async_track_renames(hass, entry, coordinator)
     async_track_equipment(hass, entry, coordinator)
     return True
 

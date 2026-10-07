@@ -230,7 +230,8 @@ class SplashmeChemistryCard extends SplashmeCardBase {
     const cfg = this._config;
     const stable = this._state(cfg.stable_entity);
     const status = root.querySelector(".status");
-    status.textContent = stable ? (stable.state === "on" ? "Stable" : "Unstable") : "--";
+    // Not stable means no valid reading: pH/ORP are unknown until flow settles.
+    status.textContent = stable ? (stable.state === "on" ? "Stable" : "Waiting for flow") : "--";
     status.className = `status ${stable ? (stable.state === "on" ? "stable" : "unstable") : ""}`;
 
     this._gauge("orp", {

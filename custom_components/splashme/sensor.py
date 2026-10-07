@@ -13,6 +13,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import SplashMeConfigEntry, is_lan_entry
+from . import pv2
 from .coordinator import SplashMeDeviceSnapshot
 from .entity import SplashMeDeviceEntity
 from .lan import SplashMeLanEntity
@@ -141,6 +142,13 @@ TEMPERATURE_SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
     ),
 )
 
+
+def _chemistry_settled(snapshot: SplashMeDeviceSnapshot) -> bool:
+    # Without flow the probes sit in still water: pH/ORP are only valid once the
+    # controller reports the chemistry stable. No dashboard data: keep the reading.
+    return (snapshot.dashboard or {}).get("chemistry_stable") is not False
+
+
 VALUE_FNS: dict[str, Any] = {
     "pump_brand": lambda snapshot: snapshot.pump.pump_brand if snapshot.pump else None,
     "pump_actual_speed": lambda snapshot: snapshot.pump.actual_speed if snapshot.pump else None,
@@ -155,11 +163,15 @@ VALUE_FNS: dict[str, Any] = {
     ),
     "chemistry_ph": lambda snapshot: (
         snapshot.chemistry.ph_value / 10
-        if snapshot.chemistry and snapshot.chemistry.ph_value is not None
+        if snapshot.chemistry
+        and snapshot.chemistry.ph_value is not None
+        and _chemistry_settled(snapshot)
         else None
     ),
     "chemistry_orp": lambda snapshot: (
-        snapshot.chemistry.orp_value if snapshot.chemistry else None
+        snapshot.chemistry.orp_value
+        if snapshot.chemistry and _chemistry_settled(snapshot)
+        else None
     ),
     "temperature_water": lambda snapshot: (
         snapshot.temperature.water_temp if snapshot.temperature else None
@@ -258,12 +270,19 @@ def _lan_ambient(data):
     return None if t is None or t.ambient_temp == 0 else t.ambient_temp
 
 
+def _lan_chemistry(data, field):
+    # Without flow the probes sit in still water: report unknown until the
+    # controller says the chemistry is stable (flow held for 2 minutes).
+    t = data.telemetry
+    return getattr(t, field) if t is not None and t.flag(pv2.FLAG_CHEM_STABLE) else None
+
+
 LAN_SENSORS: tuple[tuple[str, str, str | None, SensorDeviceClass | None, str | None, Any], ...] = (
     ("water_temp", "Water Temperature", UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, "mdi:pool-thermometer",
      lambda d: d.telemetry.water_temp if d.telemetry else None),
     ("solar_temp", "Ambient Temperature", UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, "mdi:thermometer", _lan_ambient),
-    ("actual_ph", "pH", "pH", None, "mdi:flask-outline", lambda d: d.telemetry.ph if d.telemetry else None),
-    ("actual_orp", "ORP", "mV", None, "mdi:chart-bell-curve-cumulative", lambda d: d.telemetry.orp if d.telemetry else None),
+    ("actual_ph", "pH", "pH", None, "mdi:flask-outline", lambda d: _lan_chemistry(d, "ph")),
+    ("actual_orp", "ORP", "mV", None, "mdi:chart-bell-curve-cumulative", lambda d: _lan_chemistry(d, "orp")),
     ("actual_flow_rate", "Flow Rate", "L/min", None, "mdi:waves-arrow-right", lambda d: d.telemetry.flow if d.telemetry else None),
     ("actual_pressure", "Pressure", "kPa", SensorDeviceClass.PRESSURE, "mdi:gauge", lambda d: d.telemetry.pressure if d.telemetry else None),
     ("actual_pump_speed", "Pump Speed", "%", None, "mdi:fan", lambda d: d.telemetry.pump_speed if d.telemetry else None),

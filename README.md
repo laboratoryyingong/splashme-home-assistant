@@ -118,11 +118,12 @@ the controller is added automatically the next time it is seen.
 Only controllers paired to the account you signed in with can be added.
 Sign in with the account that owns the controller in the SplashMe app.
 
-**pH and ORP show "unknown".**
-This is expected while the filter pump is off. Without water flow the probes
-sit in still water, so the controller only reports pH and ORP once the pump
-has been running for about 2 minutes. **Chemistry Stable** turns on when the
-readings are valid again.
+**pH, ORP and water temperature don't change while the pump is off.**
+This is expected. Without water flow the probes sit in still water, so these
+sensors keep the last reading taken while the pump was running, and update
+again once it has been running for about 2 minutes (**Chemistry Stable** turns
+on). Flow rate and pressure stay live, so they show the pump is off. Right
+after installing, the held sensors read "unknown" until the pump has run once.
 
 ## Getting help
 

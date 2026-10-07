@@ -187,7 +187,7 @@ class SplashmeChemistryCard extends SplashmeCardBase {
         ${BASE_STYLE}
         .status { font-size: 22px; font-weight: 600; margin: 2px 0 6px; }
         .status.stable { color: #4caf50; }
-        .status.unstable { color: #ff9800; }
+        .status.held { color: var(--secondary-text-color); }
         .gauges { display: flex; justify-content: space-around; gap: 8px; }
         .gauge { flex: 1; max-width: 170px; text-align: center; }
         svg { width: 100%; display: block; }
@@ -230,9 +230,9 @@ class SplashmeChemistryCard extends SplashmeCardBase {
     const cfg = this._config;
     const stable = this._state(cfg.stable_entity);
     const status = root.querySelector(".status");
-    // Not stable means no valid reading: pH/ORP are unknown until flow settles.
-    status.textContent = stable ? (stable.state === "on" ? "Stable" : "Waiting for flow") : "--";
-    status.className = `status ${stable ? (stable.state === "on" ? "stable" : "unstable") : ""}`;
+    // Not stable (pump off or just started): pH/ORP hold the reading from when the pump last ran.
+    status.textContent = stable ? (stable.state === "on" ? "Stable" : "Last reading") : "--";
+    status.className = `status ${stable ? (stable.state === "on" ? "stable" : "held") : ""}`;
 
     this._gauge("orp", {
       name: "ORP",

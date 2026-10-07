@@ -3,13 +3,14 @@
 from typing import Any
 
 from homeassistant.components.sensor import (
+    RestoreSensor,
     SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
     SensorStateClass,
 )
 from homeassistant.const import UnitOfTemperature, UnitOfTime
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import SplashMeConfigEntry, is_lan_entry
@@ -143,11 +144,15 @@ TEMPERATURE_SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
 )
 
 
-def _chemistry_settled(snapshot: SplashMeDeviceSnapshot) -> bool:
-    # Without flow the probes sit in still water: pH/ORP are only valid once the
-    # controller reports the chemistry stable. No dashboard data: keep the reading.
+def _flow_settled(snapshot: SplashMeDeviceSnapshot) -> bool:
+    # Without flow the probes sit in still water: pH, ORP and water temperature are
+    # only valid once the controller reports the chemistry stable. No dashboard data:
+    # take the reading.
     return (snapshot.dashboard or {}).get("chemistry_stable") is not False
 
+
+# Held while the pump is off (see HoldsLastReading).
+HELD_VALUE_KEYS = {"chemistry_ph", "chemistry_orp", "temperature_water"}
 
 VALUE_FNS: dict[str, Any] = {
     "pump_brand": lambda snapshot: snapshot.pump.pump_brand if snapshot.pump else None,
@@ -165,16 +170,18 @@ VALUE_FNS: dict[str, Any] = {
         snapshot.chemistry.ph_value / 10
         if snapshot.chemistry
         and snapshot.chemistry.ph_value is not None
-        and _chemistry_settled(snapshot)
+        and _flow_settled(snapshot)
         else None
     ),
     "chemistry_orp": lambda snapshot: (
         snapshot.chemistry.orp_value
-        if snapshot.chemistry and _chemistry_settled(snapshot)
+        if snapshot.chemistry and _flow_settled(snapshot)
         else None
     ),
     "temperature_water": lambda snapshot: (
-        snapshot.temperature.water_temp if snapshot.temperature else None
+        snapshot.temperature.water_temp
+        if snapshot.temperature and _flow_settled(snapshot)
+        else None
     ),
     "temperature_ambient": lambda snapshot: (
         snapshot.temperature.ambient_temp if snapshot.temperature else None
@@ -211,7 +218,9 @@ async def async_setup_entry(
     if is_lan_entry(entry):
         coordinator = entry.runtime_data.coordinator
         entities: list[SensorEntity] = [
-            SplashMeLanSensor(coordinator, entry, key, name, unit, device_class, icon, fn)
+            (SplashMeLanHeldSensor if key in LAN_HELD_KEYS else SplashMeLanSensor)(
+                coordinator, entry, key, name, unit, device_class, icon, fn
+            )
             for key, name, unit, device_class, icon, fn in LAN_SENSORS
         ]
         entities.extend(
@@ -225,7 +234,9 @@ async def async_setup_entry(
     entities: list[SensorEntity] = []
     for device in coordinator.data.devices:
         entities.extend(
-            SplashMeValueSensor(coordinator, device, description)
+            (SplashMeHeldValueSensor if description.key in HELD_VALUE_KEYS else SplashMeValueSensor)(
+                coordinator, device, description
+            )
             for description in (
                 PUMP_SENSOR_DESCRIPTIONS
                 + CHEMISTRY_SENSOR_DESCRIPTIONS
@@ -235,6 +246,38 @@ async def async_setup_entry(
         )
 
     async_add_entities(entities)
+
+
+class HoldsLastReading(RestoreSensor):
+    """Keeps showing the last valid reading while the pump is off.
+
+    The value function returns None until the controller reports the chemistry
+    stable (flow held for 2 minutes). Until then the reading taken before the pump
+    stopped stays, across restarts too; unknown only before the first valid one.
+    """
+
+    _held: Any = None
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the held reading, then take the live one if it is valid."""
+        await super().async_added_to_hass()
+        if (last := await self.async_get_last_sensor_data()) is not None:
+            self._held = last.native_value
+        self._hold()
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        self._hold()
+        super()._handle_coordinator_update()
+
+    def _hold(self) -> None:
+        if (value := super().native_value) is not None:
+            self._held = value
+
+    @property
+    def native_value(self) -> Any:
+        """Return the latest valid reading."""
+        return self._held
 
 
 class SplashMeValueSensor(SplashMeDeviceEntity, SensorEntity):
@@ -263,6 +306,10 @@ class SplashMeValueSensor(SplashMeDeviceEntity, SensorEntity):
         return self.coordinator.data.snapshots.get(self.device.device_id)
 
 
+class SplashMeHeldValueSensor(HoldsLastReading, SplashMeValueSensor):
+    """Cloud reading that is only valid with flow (pH, ORP, water temperature)."""
+
+
 # LAN sensors read straight off the state frame: (key, name, unit, device_class, icon, value fn)
 def _lan_ambient(data):
     # 0 means the ambient/solar sensor is not fitted.
@@ -270,19 +317,22 @@ def _lan_ambient(data):
     return None if t is None or t.ambient_temp == 0 else t.ambient_temp
 
 
-def _lan_chemistry(data, field):
-    # Without flow the probes sit in still water: report unknown until the
-    # controller says the chemistry is stable (flow held for 2 minutes).
+def _lan_settled(data, field):
+    # Without flow the probes sit in still water: the reading is only valid once
+    # the controller says the chemistry is stable (flow held for 2 minutes).
     t = data.telemetry
     return getattr(t, field) if t is not None and t.flag(pv2.FLAG_CHEM_STABLE) else None
 
 
+# Held while the pump is off (see HoldsLastReading); flow and pressure stay live.
+LAN_HELD_KEYS = {"water_temp", "actual_ph", "actual_orp"}
+
 LAN_SENSORS: tuple[tuple[str, str, str | None, SensorDeviceClass | None, str | None, Any], ...] = (
     ("water_temp", "Water Temperature", UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, "mdi:pool-thermometer",
-     lambda d: d.telemetry.water_temp if d.telemetry else None),
+     lambda d: _lan_settled(d, "water_temp")),
     ("solar_temp", "Ambient Temperature", UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, "mdi:thermometer", _lan_ambient),
-    ("actual_ph", "pH", "pH", None, "mdi:flask-outline", lambda d: _lan_chemistry(d, "ph")),
-    ("actual_orp", "ORP", "mV", None, "mdi:chart-bell-curve-cumulative", lambda d: _lan_chemistry(d, "orp")),
+    ("actual_ph", "pH", "pH", None, "mdi:flask-outline", lambda d: _lan_settled(d, "ph")),
+    ("actual_orp", "ORP", "mV", None, "mdi:chart-bell-curve-cumulative", lambda d: _lan_settled(d, "orp")),
     ("actual_flow_rate", "Flow Rate", "L/min", None, "mdi:waves-arrow-right", lambda d: d.telemetry.flow if d.telemetry else None),
     ("actual_pressure", "Pressure", "kPa", SensorDeviceClass.PRESSURE, "mdi:gauge", lambda d: d.telemetry.pressure if d.telemetry else None),
     ("actual_pump_speed", "Pump Speed", "%", None, "mdi:fan", lambda d: d.telemetry.pump_speed if d.telemetry else None),
@@ -336,3 +386,7 @@ class SplashMeLanSensor(SplashMeLanEntity, SensorEntity):
     def native_value(self) -> Any:
         """Return the current value."""
         return self._value_fn(self.coordinator.data)
+
+
+class SplashMeLanHeldSensor(HoldsLastReading, SplashMeLanSensor):
+    """LAN reading that is only valid with flow (pH, ORP, water temperature)."""

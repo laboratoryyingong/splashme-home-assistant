@@ -385,6 +385,7 @@ def build_dashboard_config(
             _status_card("custom:splashme-filtration-card", ent, {
                 "speed_entity": "actual_pump_speed" if variable_speed else None,
                 "flow_entity": "actual_flow_rate",
+                "status_entity": "pump_status", "prime_entity": "pump_prime_left",
                 "pressure_entity": "actual_pressure", "type_entity": "pump_brand",
                 "mode_entity": "pump_mode",
                 "pump_entity": f"aux_{pump.slot}" if pump is not None else None,

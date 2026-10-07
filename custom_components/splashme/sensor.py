@@ -17,7 +17,8 @@ from . import SplashMeConfigEntry, is_lan_entry
 from . import pv2
 from .coordinator import SplashMeDeviceSnapshot
 from .entity import SplashMeDeviceEntity
-from .lan import SplashMeLanEntity
+from .lan import MAIN_PUMP_TYPE_CODE, SplashMeLanEntity
+from .number import SINGLE_SPEED_PUMP_BRAND
 
 PUMP_SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(
@@ -317,6 +318,27 @@ def _lan_ambient(data):
     return None if t is None or t.ambient_temp == 0 else t.ambient_temp
 
 
+def _pump_status(data):
+    """Filter pump start-up stage, so a slow start doesn't look like a fault.
+
+    On start the controller primes: a variable speed pump runs flat out for the
+    prime time (set in the app, 240 s by default) before dropping to its set
+    speed; its drive reports no speed until the motor turns. A single speed
+    pump has no drive, so it is running as soon as its relay is.
+    """
+    t = data.telemetry
+    if t is None:
+        return None
+    if t.flag2(pv2.FLAG2_PUMP_PRIMING):
+        return "Priming"
+    pump = next((a for a in data.aux if a.type_code == MAIN_PUMP_TYPE_CODE), None)
+    if pump is None or not pump.is_on:
+        # Switched off but kept running to cool the heater down.
+        return "Cooling down" if t.flag2(pv2.FLAG2_PUMP_COOLING) else "Off"
+    variable_speed = data.pump is not None and bool(data.pump.model) and data.pump.brand != SINGLE_SPEED_PUMP_BRAND
+    return "Starting" if variable_speed and t.pump_speed == 0 else "Running"
+
+
 def _lan_settled(data, field):
     # Without flow the probes sit in still water: the reading is only valid once
     # the controller says the chemistry is stable (flow held for 2 minutes).
@@ -339,6 +361,8 @@ LAN_SENSORS: tuple[tuple[str, str, str | None, SensorDeviceClass | None, str | N
     ("pump_power", "Pump Power", "W", SensorDeviceClass.POWER, "mdi:flash", lambda d: d.telemetry.pump_power if d.telemetry else None),
     ("pump_cooldown_left", "Heater Cooldown Remaining", UnitOfTime.SECONDS, SensorDeviceClass.DURATION, "mdi:fan-clock",
      lambda d: d.telemetry.pump_cooldown_remain if d.telemetry else None),
+    ("pump_prime_left", "Priming Remaining", UnitOfTime.SECONDS, SensorDeviceClass.DURATION, "mdi:timer-sand",
+     lambda d: d.telemetry.pump_prime_remain if d.telemetry else None),
     # Drum volumes travel in mL (mobile app convention); show litres.
     ("acid_remaining", "Acid Remaining", "L", None, "mdi:barrel-outline", lambda d: d.config.remain_acid_volume / 1000 if d.config else None),
     ("chlorine_remaining", "Chlorine Remaining", "L", None, "mdi:barrel", lambda d: d.config.remain_chlorine_volume / 1000 if d.config else None),
@@ -351,6 +375,7 @@ LAN_TEXT_SENSORS: tuple[tuple[str, str, str, Any], ...] = (
     ("pump_mode", "Pump Mode", "mdi:pump", lambda d: _pump_mode_label(d.telemetry.main_pump) if d.telemetry else None),
     ("pump_brand", "Pump Brand", "mdi:pump", lambda d: d.pump.brand if d.pump else None),
     ("pump_model", "Pump Model", "mdi:pump", lambda d: d.pump.model if d.pump else None),
+    ("pump_status", "Pump Status", "mdi:pump", _pump_status),
 )
 
 

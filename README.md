@@ -45,7 +45,8 @@ home.
 
 - **Water chemistry**: pH, ORP, water and ambient temperature, pressure,
   doses today, drum volumes and chemical remaining, desired pH / ORP setpoints.
-- **Pump**: on/off, speed, mode, flow rate, brand.
+- **Pump**: on/off, speed, mode, start-up status (starting, priming with a
+  countdown), flow rate, brand.
 - **Heater** and **auxiliary outputs** (lights and other relays).
 - **Schedules**: `splashme.create_schedule`, `splashme.update_schedule`,
   `splashme.delete_schedule` services to manage the controller's pool schedules.

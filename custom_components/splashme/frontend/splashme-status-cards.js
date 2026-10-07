@@ -14,6 +14,8 @@
  *   type: custom:splashme-filtration-card
  *   speed_entity: sensor.pump_speed        flow_entity: sensor.flow_rate
  *   # no speed_entity (single speed pump): the ring shows the pump on/off
+ *   status_entity: sensor.pump_status      prime_entity: sensor.priming_remaining
+ *   # optional: "Starting" / "Priming 3:12" / "Cooling down" under the speed
  *   pressure_entity: sensor.pressure       pressure_max: 200        # kPa, bar full scale
  *   type_entity: sensor.pump_brand         mode_entity: sensor.pump_mode
  *   pump_entity: switch.filter_pump        # optional, ring toggles it
@@ -381,6 +383,15 @@ class SplashmeFiltrationCard extends SplashmeCardBase {
     this._hass.callService("switch", st.state === "on" ? "turn_off" : "turn_on", { entity_id: entityId });
   }
 
+  disconnectedCallback() {
+    this._stopTick();
+  }
+
+  _stopTick() {
+    clearInterval(this._tick);
+    this._tick = null;
+  }
+
   _template() {
     return `
       <style>
@@ -391,6 +402,7 @@ class SplashmeFiltrationCard extends SplashmeCardBase {
         .ring-track { fill: none; stroke: var(--divider-color, #9e9e9e); stroke-width: 8; }
         .ring-fill { fill: none; stroke: #4dd0c4; stroke-width: 8; stroke-linecap: round; transform: rotate(-90deg); transform-origin: 60px 60px; transition: stroke-dasharray 0.6s; }
         .ring-text { font-size: 18px; fill: var(--primary-text-color); text-anchor: middle; }
+        .ring-sub { font-size: 11px; fill: var(--secondary-text-color); text-anchor: middle; }
         .flow { text-align: center; border-left: 1px solid var(--divider-color, #9e9e9e); }
         .flow ha-icon { --mdc-icon-size: 30px; color: #4dd0c4; }
         .flow b { display: block; font-size: 26px; font-weight: 600; }
@@ -401,6 +413,7 @@ class SplashmeFiltrationCard extends SplashmeCardBase {
         .foot { display: flex; justify-content: space-between; margin-top: 12px; font-size: 14px; }
         .ring.clickable { cursor: pointer; }
         .ring-fill.on { stroke: #4caf50; }
+        .ring-fill.starting { stroke: #ff9800; }
         .linked { margin-top: 14px; }
         .linked[hidden] { display: none; }
         .linked .caption { font-size: 12px; color: var(--secondary-text-color); display: flex; align-items: center; gap: 4px; margin-bottom: 6px; }
@@ -418,6 +431,7 @@ class SplashmeFiltrationCard extends SplashmeCardBase {
               <circle class="ring-track" cx="60" cy="60" r="50"></circle>
               <circle class="ring-fill" cx="60" cy="60" r="50"></circle>
               <text class="ring-text" x="60" y="66">--</text>
+              <text class="ring-sub" x="60" y="84"></text>
             </svg>
           </div>
           <div class="flow"><ha-icon icon="mdi:weather-windy"></ha-icon><b>--</b></div>
@@ -467,6 +481,21 @@ class SplashmeFiltrationCard extends SplashmeCardBase {
 
     root.querySelector(".ring").classList.toggle("clickable", !!pump);
     fill.classList.toggle("on", !!pump && pump.state === "on");
+
+    // Start-up stage under the speed: why a pump that is on isn't at its set speed yet.
+    const stage = this._state(cfg.status_entity);
+    const starting = !!stage && (stage.state === "Starting" || stage.state === "Priming");
+    let sub = stage && (starting || stage.state === "Cooling down") ? stage.state : "";
+    const prime = stage && stage.state === "Priming" ? this._state(cfg.prime_entity) : null;
+    if (prime) {
+      // Count down between polls, from when the remaining time was last reported.
+      const left = parseFloat(prime.state) - (Date.now() - Date.parse(prime.last_updated)) / 1000;
+      if (left > 0) sub += ` ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, "0")}`;
+    }
+    root.querySelector(".ring-sub").textContent = sub;
+    fill.classList.toggle("starting", starting);
+    if (prime && !this._tick) this._tick = setInterval(() => this._update(), 1000);
+    else if (!prime && this._tick) this._stopTick();
 
     const linked = root.querySelector(".linked");
     linked.hidden = !cfg.linked.length;

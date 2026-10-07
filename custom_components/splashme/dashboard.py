@@ -249,6 +249,9 @@ def build_dashboard_config(
     # of equipment assigned to an output.
     unfitted = _unfitted(data)
     ent = {key: entity_id for key, entity_id in ent.items() if key not in unfitted}
+    # Only a variable speed pump gets the speed slider. A single speed pump only
+    # reads 0 or 100 %: show it on or off instead of a speed.
+    variable_speed = "pump_speed_setpoint" in ent
     aux = list(data.aux) if data is not None else []
     pump = next((a for a in aux if a.type_code == MAIN_PUMP_TYPE_CODE), None)
     # A heater on a general output gets no target temperature (the controller only
@@ -380,7 +383,8 @@ def build_dashboard_config(
         equipment = [
             _heading("Filtration", "mdi:pump"),
             _status_card("custom:splashme-filtration-card", ent, {
-                "speed_entity": "actual_pump_speed", "flow_entity": "actual_flow_rate",
+                "speed_entity": "actual_pump_speed" if variable_speed else None,
+                "flow_entity": "actual_flow_rate",
                 "pressure_entity": "actual_pressure", "type_entity": "pump_brand",
                 "mode_entity": "pump_mode",
                 "pump_entity": f"aux_{pump.slot}" if pump is not None else None,
@@ -406,10 +410,16 @@ def build_dashboard_config(
     if pump is not None:
         activity_keys.insert(0, f"aux_{pump.slot}")
     activity_keys += [f"aux_{a.slot}" for a in aux_heaters]
+    if variable_speed:
+        pump_series: tuple[str, ...] = ("actual_pump_speed",)
+    elif pump is not None:
+        pump_series = (f"aux_{pump.slot}",)  # single speed: on/off
+    else:
+        pump_series = ()
     graphs = [
         history("Chemistry", ("actual_ph", "actual_orp")),
         history("Temperature", ("water_temp", "solar_temp")),
-        history("Pump", ("actual_pump_speed", "actual_flow_rate", "actual_pressure")),
+        history("Pump", (*pump_series, "actual_flow_rate", "actual_pressure")),
         history("Activity", tuple(activity_keys)),
     ]
     trends = [g for g in graphs if g]

@@ -13,6 +13,7 @@
  *
  *   type: custom:splashme-filtration-card
  *   speed_entity: sensor.pump_speed        flow_entity: sensor.flow_rate
+ *   # no speed_entity (single speed pump): the ring shows the pump on/off
  *   pressure_entity: sensor.pressure       pressure_max: 200        # kPa, bar full scale
  *   type_entity: sensor.pump_brand         mode_entity: sensor.pump_mode
  *   pump_entity: switch.filter_pump        # optional, ring toggles it
@@ -434,12 +435,17 @@ class SplashmeFiltrationCard extends SplashmeCardBase {
     if (!this._built) return;
     const root = this.shadowRoot;
     const cfg = this._config;
-    const speed = this._number(cfg.speed_entity);
+    const pump = this._state(cfg.pump_entity);
+    // No speed_entity: a single speed pump (only ever 0 or 100 %), so the ring shows on/off.
+    const onOff = !cfg.speed_entity;
+    const speed = onOff ? (pump ? (pump.state === "on" ? 100 : 0) : null) : this._number(cfg.speed_entity);
     const circumference = 2 * Math.PI * 50;
     const fill = root.querySelector(".ring-fill");
     const pct = speed == null ? 0 : Math.max(0, Math.min(100, speed));
     fill.setAttribute("stroke-dasharray", `${(circumference * pct) / 100} ${circumference}`);
-    root.querySelector(".ring-text").textContent = speed == null ? "--" : `${Math.round(speed)} %`;
+    fill.setAttribute("visibility", pct > 0 ? "visible" : "hidden"); // a 0-length round cap still draws a dot
+    root.querySelector(".ring-text").textContent =
+      speed == null ? "--" : onOff ? (speed ? "ON" : "OFF") : `${Math.round(speed)} %`;
 
     const flow = this._number(cfg.flow_entity);
     root.querySelector(".flow b").textContent = flow == null ? "--" : `${Math.round(flow)} lpm`;
@@ -459,7 +465,6 @@ class SplashmeFiltrationCard extends SplashmeCardBase {
     root.querySelector(".type").textContent = type ? type.state : "";
     root.querySelector(".mode").textContent = mode ? mode.state : "";
 
-    const pump = this._state(cfg.pump_entity);
     root.querySelector(".ring").classList.toggle("clickable", !!pump);
     fill.classList.toggle("on", !!pump && pump.state === "on");
 

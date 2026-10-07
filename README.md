@@ -50,7 +50,8 @@ home.
 - **Schedules**: `splashme.create_schedule`, `splashme.update_schedule`,
   `splashme.delete_schedule` services to manage the controller's pool schedules.
 - **SplashMe dashboard**: a ready-made sidebar panel with tank, heater and
-  chemistry cards, generated for each controller.
+  chemistry cards, generated for each controller from the equipment it has,
+  and a Trends tab with the history graphs.
 - Diagnostics download for support.
 
 ## Requirements
@@ -124,6 +125,19 @@ sensors keep the last reading taken while the pump was running, and update
 again once it has been running for about 2 minutes (**Chemistry Stable** turns
 on). Flow rate and pressure stay live, so they show the pump is off. Right
 after installing, the held sensors read "unknown" until the pump has run once.
+
+**The dashboard has no heater dial.**
+The target temperature dial appears when the heater's output is set up as
+Pool Heater, Spa Heater or Solar in the SplashMe app: the controller then runs
+it to the target temperature. A heater on a general auxiliary output is only
+switched on and off. Give that output a name containing "heat" (such as "Heat
+Pump") and the dashboard shows its switch under Heating.
+
+**The Pool dashboard doesn't pick up changes.**
+Once you edit the Pool dashboard, the integration leaves it alone, so new
+equipment and dashboard improvements no longer appear. Press **Reset Pool
+Dashboard** (**Settings → Devices & services → SplashMe →** your controller,
+under Configuration) to go back to the generated layout; your edits are lost.
 
 ## Getting help
 

@@ -7,6 +7,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import SplashMeConfigEntry, is_lan_entry
+from .dashboard import async_register_dashboard
 from .entity import SplashMeDeviceEntity
 from .lan import SplashMeLanEntity
 from .lights import LIGHT_ACTIONS, LightAction
@@ -26,6 +27,7 @@ async def async_setup_entry(
                 SplashMeLanRefreshButton(coordinator, entry),
                 SplashMeLanResetVolumeButton(coordinator, entry, "acid"),
                 SplashMeLanResetVolumeButton(coordinator, entry, "chlorine"),
+                SplashMeLanResetDashboardButton(coordinator, entry),
             ]
         )
         # Brand-specific light actions (next colour / sync / brightness),
@@ -152,6 +154,27 @@ class SplashMeLanResetVolumeButton(SplashMeLanEntity, ButtonEntity):
             await self.coordinator.async_update_ph_settings({"reset_acid_volume": True})
         else:
             await self.coordinator.async_update_chlorine_settings({"reset_chlorine_volume": True})
+
+
+class SplashMeLanResetDashboardButton(SplashMeLanEntity, ButtonEntity):
+    """Put the Pool dashboard back to the generated layout, dropping edits made in the UI.
+
+    An edited dashboard is never regenerated; after a reset it follows the
+    equipment and integration updates again.
+    """
+
+    _attr_icon = "mdi:view-dashboard"
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, coordinator, entry) -> None:
+        """Initialize the button."""
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{self.unique_id_base}_reset_dashboard"
+        self._attr_name = "Reset Pool Dashboard"
+
+    async def async_press(self) -> None:
+        """Regenerate the dashboard."""
+        await async_register_dashboard(self.hass, self._entry, self.coordinator, reset=True)
 
 
 class SplashMeLanLightActionButton(SplashMeLanEntity, ButtonEntity):

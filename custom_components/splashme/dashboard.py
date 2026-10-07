@@ -34,8 +34,13 @@ from homeassistant.helpers.event import async_call_later
 
 from .const import CONF_DEVICE_ID, CONF_MAC, DOMAIN
 from .lan import (
+    CHLORINATOR_TYPE_CODES,
     LIQUID_CHLORINE_TYPE_CODES,
     MAIN_PUMP_TYPE_CODE,
+    PH_DOSER_TYPE_CODES,
+    POOL_HEATER_TYPE_CODES,
+    SOLAR_TYPE_CODES,
+    SPA_HEATER_TYPE_CODES,
     SplashMeLanCoordinator,
     SplashMeLanData,
     lan_device_identifier,
@@ -85,9 +90,12 @@ def _config_hash(config: dict[str, Any]) -> str:
 
 
 async def async_register_dashboard(
-    hass: HomeAssistant, entry: ConfigEntry, coordinator: SplashMeLanCoordinator
+    hass: HomeAssistant, entry: ConfigEntry, coordinator: SplashMeLanCoordinator, *, reset: bool = False
 ) -> None:
-    """Create or refresh the entry's dashboard and its sidebar panel."""
+    """Create or refresh the entry's dashboard and its sidebar panel.
+
+    reset: overwrite a dashboard the user edited, so it is generated again.
+    """
     item = _dashboard_item(entry)
     url_path = item[CONF_URL_PATH]
     dashboards = hass.data[LOVELACE_DATA].dashboards
@@ -111,11 +119,12 @@ async def async_register_dashboard(
         current = await storage.async_load(False)
     except ConfigNotFound:
         current = None
-    if current is not None and _config_hash(current) != entry.options.get(OPT_DASHBOARD_HASH):
-        # Edited by the user in the UI: keep their version.
-        return
-    if current is not None and _config_hash(current) == _config_hash(generated):
-        return
+    if current is not None and not reset:
+        if _config_hash(current) != entry.options.get(OPT_DASHBOARD_HASH):
+            # Edited by the user in the UI: keep their version.
+            return
+        if _config_hash(current) == _config_hash(generated):
+            return
     await storage.async_save(generated)
     hass.config_entries.async_update_entry(
         entry, options={**entry.options, OPT_DASHBOARD_HASH: _config_hash(generated)}
@@ -227,12 +236,25 @@ def build_dashboard_config(
     """Generate the sections layout from the device's current entities."""
     ent = _entity_map(hass, entry)
     data = coordinator.data
+    # Dosing and heating state entities exist whatever is fitted: only show those
+    # of equipment assigned to an output.
+    unfitted = _unfitted(data)
+    ent = {key: entity_id for key, entity_id in ent.items() if key not in unfitted}
+    aux = list(data.aux) if data is not None else []
+    pump = next((a for a in aux if a.type_code == MAIN_PUMP_TYPE_CODE), None)
+    # A heater on a general output gets no target temperature (the controller only
+    # switches it), but its name gives it away: "Heater", "Heat Pump".
+    aux_heaters = [
+        a for a in aux
+        if a is not pump and not a.is_pump_linked and f"aux_{a.slot}" in ent
+        and "heat" in a.display_name.lower()
+    ]
 
     def tiles(*specs: tuple[str, str | None]) -> list[dict[str, Any]]:
         return [_tile(ent[key], name) for key, name in specs if key in ent]
 
     # -- Dosing drums ------------------------------------------------------
-    drums: list[dict[str, Any]] = [_heading("Dosing Drums", "mdi:barrel")]
+    drums: list[dict[str, Any]] = []
     for kind, label, color in (("acid", "Acid", "#ef6c00"), ("chlorine", "Chlorine", None)):
         if f"{kind}_remaining" not in ent:
             continue
@@ -250,8 +272,10 @@ def build_dashboard_config(
             card["color"] = color
         drums.append(card)
     drums += tiles(("ph_doses_today", "pH Doses Today"), ("chlorine_doses_today", "Chlorine Doses Today"))
+    if drums:
+        drums.insert(0, _heading("Dosing Drums", "mdi:barrel"))
 
-    # -- Heating (temperature dials, or plain state tiles without heaters) --
+    # -- Heating (temperature dials, or the temperatures without heating equipment) --
     heating_tabs = [
         tab for tab in (
             _heater_tab(ent, "Pool", "heating_pool_target", (
@@ -269,15 +293,22 @@ def build_dashboard_config(
             "water_entity": "water_temp", "ambient_entity": "solar_temp",
         }) | {"tabs": heating_tabs}]
     else:
-        heating = tiles(("heater_state", "Heater"), ("solar_state", "Solar"), ("spa_heater_state", "Spa Heater"))
+        # The heater card shows these otherwise.
+        heating = tiles(("water_temp", "Water Temperature"), ("solar_temp", "Ambient Temperature"))
+    heating += [_toggle_tile(ent[f"aux_{a.slot}"], a.display_name) for a in aux_heaters]
     if heating:
-        drums = [_heading("Heating", "mdi:fire"), *heating, *drums]
+        if heating_tabs or aux_heaters:
+            heading = _heading("Heating", "mdi:fire")
+        else:
+            heading = _heading("Temperature", "mdi:thermometer")
+        drums = [heading, *heating, *drums]
 
     # -- Water quality, targets, schedules ----------------------------------
     water: list[dict[str, Any]] = [_heading("Water Quality", "mdi:water-check")]
     if "actual_ph" in ent or "actual_orp" in ent:
         water.append(_status_card("custom:splashme-chemistry-card", ent, {
             "stable_entity": "chemistry_stable",
+            "pump_entity": f"aux_{pump.slot}" if pump is not None else None,
             "orp_entity": "actual_orp", "orp_target_entity": _orp_target_key(data),
             "orp_dosing_entity": "orp_switch_status",
             "orp_enable_entity": "dosing_liquid" if "dosing_liquid" in ent else "dosing_chlorinator",
@@ -291,7 +322,7 @@ def build_dashboard_config(
             ("ph_switch_status", "pH Dosing"), ("orp_switch_status", "Chlorine Dosing"),
             ("chemistry_stable", "Chemistry Stable"),
         )
-    # Temperatures show on the heater card.
+    # Temperatures show in the Heating (or Temperature) section.
     water += tiles(("connectivity", "Connectivity"), ("dry_run", "Dry Run"))
     if "actual_ph" not in ent and "actual_orp" not in ent:
         # No chemistry card to edit them in.
@@ -313,8 +344,6 @@ def build_dashboard_config(
 
     # -- Equipment -----------------------------------------------------------
     equipment: list[dict[str, Any]] = [_heading("Equipment", "mdi:pool-thermometer")]
-    aux = list(data.aux) if data is not None else []
-    pump = next((a for a in aux if a.type_code == MAIN_PUMP_TYPE_CODE), None)
     if pump is not None and f"aux_{pump.slot}" in ent:
         equipment.append(_toggle_tile(ent[f"aux_{pump.slot}"], "Filter Pump"))
     if "spa_mode" in ent:
@@ -329,7 +358,8 @@ def build_dashboard_config(
         if a.is_light and f"light_{a.slot}" in ent:
             equipment.append(_toggle_tile(ent[f"light_{a.slot}"], a.display_name))
     for a in aux:
-        if a is not pump and not a.is_light and not a.is_pump_linked and f"aux_{a.slot}" in ent:
+        if (a is not pump and not a.is_light and not a.is_pump_linked and a not in aux_heaters
+                and f"aux_{a.slot}" in ent):
             equipment.append(_toggle_tile(ent[f"aux_{a.slot}"], a.display_name))
     linked = [a for a in aux if a.is_pump_linked and f"aux_{a.slot}" in ent]
     if linked:
@@ -348,7 +378,7 @@ def build_dashboard_config(
             }) | {"linked": [{"name": a.display_name, "entity": ent[f"aux_{a.slot}"]} for a in linked]},
             *equipment,
         ]
-    # -- History (full width, under the three columns) ---------------------
+    # -- Trends (history graphs on their own view, apart from the controls) --
     def history(title: str, keys: tuple[str, ...], hours: int = 24) -> dict[str, Any] | None:
         entities = [ent[key] for key in keys if key in ent]
         if not entities:
@@ -366,32 +396,37 @@ def build_dashboard_config(
                      "orp_switch_status", "spa_mode", "pump_cooldown"]
     if pump is not None:
         activity_keys.insert(0, f"aux_{pump.slot}")
+    activity_keys += [f"aux_{a.slot}" for a in aux_heaters]
     graphs = [
         history("Chemistry", ("actual_ph", "actual_orp")),
         history("Temperature", ("water_temp", "solar_temp")),
         history("Pump", ("actual_pump_speed", "actual_flow_rate", "actual_pressure")),
         history("Activity", tuple(activity_keys)),
     ]
-    history_section: list[dict[str, Any]] = [_heading("History", "mdi:chart-line"), *[g for g in graphs if g]]
+    trends = [g for g in graphs if g]
 
-    title = _device_label(hass, entry)
-    return {
-        "title": title,
-        "views": [
-            {
-                "title": title,
-                "path": "pool",
-                "type": "sections",
-                "max_columns": 3,
-                "sections": [
-                    {"type": "grid", "cards": drums},
-                    {"type": "grid", "cards": water},
-                    {"type": "grid", "cards": equipment},
-                    {"type": "grid", "column_span": 3, "cards": history_section},
-                ],
-            }
-        ]
-    }
+    views: list[dict[str, Any]] = [
+        {
+            "title": "Controls",
+            "path": "pool",
+            "type": "sections",
+            "max_columns": 3,
+            "sections": [
+                {"type": "grid", "cards": drums},
+                {"type": "grid", "cards": water},
+                {"type": "grid", "cards": equipment},
+            ],
+        }
+    ]
+    if trends:
+        views.append({
+            "title": "Trends",
+            "path": "trends",
+            "type": "sections",
+            "max_columns": 3,
+            "sections": [{"type": "grid", "column_span": 3, "cards": trends}],
+        })
+    return {"title": _device_label(hass, entry), "views": views}
 
 
 def _status_card(card_type: str, ent: dict[str, str], keys: dict[str, str | None]) -> dict[str, Any]:
@@ -399,6 +434,30 @@ def _status_card(card_type: str, ent: dict[str, str], keys: dict[str, str | None
     card: dict[str, Any] = {"type": card_type, "grid_options": {"columns": "full", "rows": "auto"}}
     card.update({option: ent[key] for option, key in keys.items() if key and key in ent})
     return card
+
+
+def _unfitted(data: SplashMeLanData | None) -> set[str]:
+    """Entity keys of dosing and heating equipment that no output is assigned to."""
+
+    def fitted(codes: frozenset[int]) -> bool:
+        return data is not None and data.has_equipment(codes)
+
+    keys: set[str] = set()
+    if not fitted(PH_DOSER_TYPE_CODES):
+        keys |= {"acid_remaining", "acid_drum_volume", "reset_acid_volume", "ph_doses_today", "ph_switch_status"}
+    if not fitted(LIQUID_CHLORINE_TYPE_CODES):  # only liquid chlorine comes in drums
+        keys |= {"chlorine_remaining", "chlorine_drum_volume", "reset_chlorine_volume", "chlorine_doses_today"}
+    if not fitted(CHLORINATOR_TYPE_CODES | LIQUID_CHLORINE_TYPE_CODES):
+        keys.add("orp_switch_status")
+    if not fitted(POOL_HEATER_TYPE_CODES):
+        keys.add("heater_state")
+    if not fitted(SPA_HEATER_TYPE_CODES):
+        keys.add("spa_heater_state")
+    if not fitted(SOLAR_TYPE_CODES):
+        keys.add("solar_state")
+    if not fitted(POOL_HEATER_TYPE_CODES | SPA_HEATER_TYPE_CODES):  # the pump cools a heater after it stops
+        keys |= {"pump_cooldown", "pump_cooldown_left"}
+    return keys
 
 
 def _orp_target_key(data: SplashMeLanData | None) -> str:

@@ -3,6 +3,7 @@
  *
  *   type: custom:splashme-chemistry-card
  *   stable_entity: binary_sensor.chemistry_stable
+ *   pump_entity: switch.filter_pump        # optional: "Pump off" / "Waiting for flow" while not stable
  *   orp_entity: sensor.orp                 orp_target_entity: number.target_orp
  *   orp_dosing_entity: binary_sensor.chlorine_dosing   # running dot
  *   orp_enable_entity: switch.chlorinator_enabled        # enable check (optional)
@@ -86,6 +87,17 @@ const BASE_STYLE = `
 // ---------------------------------------------------------------------------
 // Chemistry
 // ---------------------------------------------------------------------------
+
+/**
+ * Status line from the Chemistry Stable and filter pump states. While not
+ * stable, pH/ORP hold the reading from when the pump last ran: say why.
+ */
+function chemistryStatus(stable, pump) {
+  if (!stable) return { text: "--", cls: "" };
+  if (stable.state === "on") return { text: "Stable", cls: "stable" };
+  if (!pump) return { text: "Last reading", cls: "held" };
+  return { text: pump.state === "off" ? "Pump off" : "Waiting for flow", cls: "held" };
+}
 
 class SplashmeChemistryCard extends SplashmeCardBase {
   setConfig(config) {
@@ -200,6 +212,7 @@ class SplashmeChemistryCard extends SplashmeCardBase {
         .reading-mark { stroke: var(--card-background-color, #fff); stroke-width: 2; }
         .legend { font-size: 17px; font-weight: 600; margin-top: -8px; display: flex; align-items: center; justify-content: center; gap: 8px; }
         .legend .name { color: #4caf50; }
+        .legend .dot[hidden] { display: none; }
         button.enable { display: inline-flex; align-items: center; gap: 7px; margin-top: 6px; padding: 4px 12px 4px 8px; border-radius: 14px; border: 1px solid var(--divider-color, #9e9e9e); background: none; color: var(--secondary-text-color); font: inherit; font-size: 13px; cursor: pointer; }
         button.enable .pip { width: 10px; height: 10px; border-radius: 50%; background: var(--disabled-color, #9e9e9e); }
         button.enable.on { border-color: #4caf50; color: #2e7d32; background: rgba(76, 175, 80, 0.12); }
@@ -228,11 +241,10 @@ class SplashmeChemistryCard extends SplashmeCardBase {
     if (!this._built) return;
     const root = this.shadowRoot;
     const cfg = this._config;
-    const stable = this._state(cfg.stable_entity);
     const status = root.querySelector(".status");
-    // Not stable (pump off or just started): pH/ORP hold the reading from when the pump last ran.
-    status.textContent = stable ? (stable.state === "on" ? "Stable" : "Last reading") : "--";
-    status.className = `status ${stable ? (stable.state === "on" ? "stable" : "held") : ""}`;
+    const { text, cls } = chemistryStatus(this._state(cfg.stable_entity), this._state(cfg.pump_entity));
+    status.textContent = text;
+    status.className = `status ${cls}`;
 
     this._gauge("orp", {
       name: "ORP",
@@ -244,6 +256,7 @@ class SplashmeChemistryCard extends SplashmeCardBase {
       good: 50, // mV either side of the target that still reads green
       digits: 0,
       dosing: this._state(cfg.orp_dosing_entity),
+      dosing_entity: cfg.orp_dosing_entity,
       enable_entity: cfg.orp_enable_entity,
       hidden: !cfg.orp_entity,
     });
@@ -257,6 +270,7 @@ class SplashmeChemistryCard extends SplashmeCardBase {
       good: 0.2,
       digits: 1,
       dosing: this._state(cfg.ph_dosing_entity),
+      dosing_entity: cfg.ph_dosing_entity,
       enable_entity: cfg.ph_enable_entity,
       hidden: !cfg.ph_entity,
     });
@@ -309,6 +323,7 @@ class SplashmeChemistryCard extends SplashmeCardBase {
     }
     el.querySelector(".value").textContent = g.target == null ? "--" : g.target.toFixed(g.digits);
     el.querySelector(".name").textContent = g.name;
+    el.querySelector(".dot").hidden = !g.dosing_entity; // no doser fitted: no dosing light
     el.querySelector(".dot").className = `dot ${g.dosing && g.dosing.state === "on" ? "on" : ""}`;
     el.querySelector(".dot").title = g.dosing ? `${g.name} dosing ${g.dosing.state === "on" ? "running" : "idle"}` : "";
     const button = el.querySelector("button.enable");

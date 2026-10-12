@@ -67,7 +67,7 @@ def dashboard_url_path(entry: ConfigEntry) -> str:
 
 def _device_label(hass: HomeAssistant, entry: ConfigEntry) -> str:
     """The name the user gave the device in HA, else as the app shows it, e.g. SplashMe_24DCC32B9888."""
-    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, lan_device_identifier(entry))})
+    device = dr.async_get(hass).async_get_device_by_identifier((DOMAIN, lan_device_identifier(entry)), entry.entry_id)
     if device is not None and device.name_by_user:
         return device.name_by_user
     device_id = entry.data.get(CONF_DEVICE_ID) or ""

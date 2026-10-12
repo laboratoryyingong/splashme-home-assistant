@@ -50,6 +50,10 @@ LAN_PORT = 8080
 OPT_LAN_PUMP_SPEED_SETPOINT = "pump_speed_setpoint"
 LAN_TIMEOUT_SECONDS = 10
 LAN_SCAN_INTERVAL_SECONDS = 15
+# After a write, poll faster for a while so flow, power and speed are seen
+# ramping (a pump takes up to a minute to prime) instead of one sample later.
+LAN_FAST_POLL_INTERVAL_SECONDS = 3
+LAN_FAST_POLL_SECONDS = 60
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,

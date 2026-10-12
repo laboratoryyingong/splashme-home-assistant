@@ -47,6 +47,8 @@ from .const import (
     CONF_MAC,
     DOMAIN,
     LAN_PORT,
+    LAN_FAST_POLL_INTERVAL_SECONDS,
+    LAN_FAST_POLL_SECONDS,
     LAN_SCAN_INTERVAL_SECONDS,
     LAN_TIMEOUT_SECONDS,
     MANUFACTURER,
@@ -58,7 +60,7 @@ _LOGGER = logging.getLogger(__name__)
 # data for a few failed polls before marking entities unavailable.
 LAN_MAX_CONSECUTIVE_FAILURES = 3
 # Schedules and dosing settings change rarely: query them every N polls.
-SLOW_QUERY_EVERY = 4
+SLOW_QUERY_INTERVAL_SECONDS = 60  # schedules, settings, lights: six signed queries
 # Aux writes are queued on the device; read back once after this delay.
 WRITE_CONFIRM_DELAY_SECONDS = 2
 
@@ -130,6 +132,10 @@ class SplashMeLanClient:
     async def _async_pv2(self, op: str, name: str = "", payload: bytes | None = None) -> dict[str, Any]:
         body: dict[str, Any] = {"op": op, "name": name, "env": ""}
         if payload is not None:
+            # Never sign ahead of wall-clock: the app and cloud sign with the
+            # current second and the device would drop their next command.
+            if (delay := self._counter.wait_time()) > 0:
+                await asyncio.sleep(delay)
             body["env"] = pv2.wrap(self._require_key(), self._counter.next(), payload).hex()
         data = await self._async_post("pv2", body)
         if data.get("ok") is False:
@@ -395,11 +401,17 @@ class SplashMeLanCoordinator(DataUpdateCoordinator[SplashMeLanData]):
         self.client = client
         self.entry = entry
         self._failures = 0
-        self._polls = 0
         self._confirm_task: asyncio.Task | None = None
         self._light_busy_until: dict[int, float] = {}
+        self._fast_poll_until: float = 0.0
+        self._slow_query_at: float = 0.0
 
     # -- polling ------------------------------------------------------------
+
+    def _start_fast_poll(self) -> None:
+        """Poll every few seconds for a minute after a write (restored in the poll loop)."""
+        self._fast_poll_until = self.hass.loop.time() + LAN_FAST_POLL_SECONDS
+        self.update_interval = timedelta(seconds=LAN_FAST_POLL_INTERVAL_SECONDS)
 
     async def _async_update_data(self) -> SplashMeLanData:
         """One state frame per poll, plus the slow queries every few polls."""
@@ -421,8 +433,12 @@ class SplashMeLanCoordinator(DataUpdateCoordinator[SplashMeLanData]):
             ):
                 # A slot was (re)assigned in the app: its name changes with it.
                 data = await self._async_fetch_identity(data)
-            if self._polls % SLOW_QUERY_EVERY == 0 or not data.schedules:
+            # Time based, not poll based, so the fast poll after a write does
+            # not multiply the signed queries sent to the device.
+            now = self.hass.loop.time()
+            if now - self._slow_query_at >= SLOW_QUERY_INTERVAL_SECONDS or not data.schedules:
                 data = await self._async_fetch_slow(data)
+                self._slow_query_at = now
         except (ClientError, TimeoutError, LanError, pv2.PV2Error) as err:
             self._failures += 1
             if self.data is not None and self._failures < LAN_MAX_CONSECUTIVE_FAILURES:
@@ -436,7 +452,9 @@ class SplashMeLanCoordinator(DataUpdateCoordinator[SplashMeLanData]):
             raise UpdateFailed(f"LAN device unreachable: {err}") from err
 
         self._failures = 0
-        self._polls += 1
+        if self._fast_poll_until and self.hass.loop.time() >= self._fast_poll_until:
+            self._fast_poll_until = 0.0
+            self.update_interval = timedelta(seconds=LAN_SCAN_INTERVAL_SECONDS)
         return data
 
     async def _async_rediscover(self) -> bool:
@@ -528,6 +546,7 @@ class SplashMeLanCoordinator(DataUpdateCoordinator[SplashMeLanData]):
             self._apply_frame(await self.client.async_action(name, payload))
         except (ClientError, TimeoutError) as err:
             raise LanError(f"Device unreachable for {name}: {err}") from err
+        self._start_fast_poll()
 
     async def async_set_heating(self, changes: dict[str, Any]) -> None:
         """Change target temperatures / heater selection.

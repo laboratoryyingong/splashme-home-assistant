@@ -17,8 +17,7 @@ from . import SplashMeConfigEntry, is_lan_entry
 from . import pv2
 from .coordinator import SplashMeDeviceSnapshot
 from .entity import SplashMeDeviceEntity
-from .lan import MAIN_PUMP_TYPE_CODE, SplashMeLanEntity
-from .number import SINGLE_SPEED_PUMP_BRAND
+from .lan import SplashMeLanEntity
 
 PUMP_SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(
@@ -319,24 +318,29 @@ def _lan_ambient(data):
 
 
 def _pump_status(data):
-    """Filter pump start-up stage, so a slow start doesn't look like a fault.
+    """Filter pump state, judged by water flow.
 
-    On start the controller primes: a variable speed pump runs flat out for the
-    prime time (set in the app, 240 s by default) before dropping to its set
-    speed; its drive reports no speed until the motor turns. A single speed
-    pump has no drive, so it is running as soon as its relay is.
+    Flow is the physical truth: the pump slot's aux mode stays "manual" while
+    a variable speed drive is stopped, and the drive's speed read-back can
+    glitch to 0 mid-run, but water either moves or it doesn't. `main_pump`
+    (0 off / schedule / manual, derived from the firmware's is_pump_on) only
+    says why there is no flow: not asked to run, still starting, or a fault.
     """
     t = data.telemetry
     if t is None:
         return None
-    if t.flag2(pv2.FLAG2_PUMP_PRIMING):
-        return "Priming"
-    pump = next((a for a in data.aux if a.type_code == MAIN_PUMP_TYPE_CODE), None)
-    if pump is None or not pump.is_on:
-        # Switched off but kept running to cool the heater down.
-        return "Cooling down" if t.flag2(pv2.FLAG2_PUMP_COOLING) else "Off"
-    variable_speed = data.pump is not None and bool(data.pump.model) and data.pump.brand != SINGLE_SPEED_PUMP_BRAND
-    return "Starting" if variable_speed and t.pump_speed == 0 else "Running"
+    if t.flow > 0:
+        if t.flag2(pv2.FLAG2_PUMP_PRIMING):
+            return "Priming"
+        if t.flag2(pv2.FLAG2_PUMP_COOLING):
+            # Switched off but kept running to cool the heater down.
+            return "Cooling down"
+        return "Running"
+    if t.main_pump == 0:
+        return "Off"
+    if t.dry_run != 3:
+        return "No flow"
+    return "Starting"
 
 
 def _lan_settled(data, field):
@@ -404,7 +408,10 @@ class SplashMeLanSensor(SplashMeLanEntity, SensorEntity):
             self._attr_device_class = device_class
         if icon is not None:
             self._attr_icon = icon
-        if measurement:
+        if key.endswith("_doses_today"):
+            # Daily counters: long-term statistics sum them and handle the reset.
+            self._attr_state_class = SensorStateClass.TOTAL_INCREASING
+        elif measurement:
             self._attr_state_class = SensorStateClass.MEASUREMENT
 
     @property

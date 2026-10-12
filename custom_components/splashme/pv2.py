@@ -90,15 +90,23 @@ class Counter:
     The device drops any inbound frame whose counter is <= the last accepted
     one, and the app and backend share that baseline. Both use unix seconds,
     so writers interleave naturally and nothing needs persisting across
-    restarts; two writes in one second are spaced by bumping past the last.
+    restarts. Two writes in one second would have to bump past the last
+    value, which puts the counter ahead of wall-clock and makes the device
+    drop the app's or the cloud's next command; callers therefore wait
+    `wait_time()` before taking the next value, so it never exceeds the
+    current second.
     """
 
     def __init__(self) -> None:
         """Initialize the counter."""
         self._last = 0
 
+    def wait_time(self) -> float:
+        """Seconds until `next()` can return a value no later than wall-clock."""
+        return max(0.0, self._last + 1 - time.time())
+
     def next(self) -> int:
-        """Return the next counter value."""
+        """Return the next counter value (strictly increasing, never past the current second after `wait_time()`)."""
         self._last = max(self._last + 1, int(time.time()))
         return self._last
 

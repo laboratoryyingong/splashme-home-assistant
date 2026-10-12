@@ -14,6 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import (
     aiohttp_client,
+    config_validation as cv,
     device_registry as dr,
 )
 from homeassistant.helpers.config_entry_oauth2_flow import (
@@ -80,6 +81,8 @@ def is_lan_entry(entry: SplashMeConfigEntry) -> bool:
 
 FRONTEND_URL_BASE = "/splashme-frontend"
 _FRONTEND_FLAG = f"{DOMAIN}_frontend_registered"
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
 async def _async_register_frontend(hass: HomeAssistant) -> None:

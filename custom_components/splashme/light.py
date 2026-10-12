@@ -41,7 +41,7 @@ async def async_setup_entry(
         entry,
         coordinator,
         "light_",
-        lambda data: {f"light_{aux.slot}": aux.slot for aux in data.aux if aux.is_light},
+        lambda data: {f"light_{aux.slot}": aux.slot for aux in data.light_slots},
         lambda slot: SplashMeLanLight(coordinator, entry, slot),
     )
     await slots.async_sync()

@@ -48,6 +48,9 @@ CONF_ENVELOPE_KEY = "envelope_key"
 LAN_PORT = 8080
 # Pump speed applied when the LAN pump switch turns on (entry option).
 OPT_LAN_PUMP_SPEED_SETPOINT = "pump_speed_setpoint"
+# Options flow of a LAN entry (dashboard behaviour)
+OPT_CREATE_DASHBOARD = "create_dashboard"
+OPT_DASHBOARD_ADMIN_ONLY = "dashboard_admin_only"
 LAN_TIMEOUT_SECONDS = 10
 LAN_SCAN_INTERVAL_SECONDS = 15
 # After a write, poll faster for a while so flow, power and speed are seen

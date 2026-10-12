@@ -43,6 +43,8 @@ from .const import (
     MANUFACTURER,
     PLATFORMS,
     PLATFORMS_LAN,
+    OPT_CREATE_DASHBOARD,
+    OPT_DASHBOARD_ADMIN_ONLY,
 )
 from .dashboard import async_register_dashboard, async_remove_dashboard, async_track_renames
 from .coordinator import SplashMeDataCoordinator, SplashMeDevice
@@ -67,6 +69,7 @@ class SplashMeLanRuntimeData:
     client: SplashMeLanClient
     coordinator: SplashMeLanCoordinator
     slot_entities: list[SplashMeLanSlotEntities] = field(default_factory=list)
+    dashboard_options: tuple[bool, bool] | None = None
 
 
 SplashMeConfigEntry = ConfigEntry[
@@ -166,10 +169,34 @@ async def _async_setup_lan_entry(
 
     entry.runtime_data = SplashMeLanRuntimeData(client=client, coordinator=coordinator)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS_LAN)
+    entry.runtime_data.dashboard_options = _dashboard_options(entry)
     await async_register_dashboard(hass, entry, coordinator)
     async_track_renames(hass, entry, coordinator)
     async_track_equipment(hass, entry, coordinator)
+    entry.async_on_unload(entry.add_update_listener(_async_lan_entry_updated))
     return True
+
+
+def _dashboard_options(entry: ConfigEntry) -> tuple[bool, bool]:
+    return (
+        bool(entry.options.get(OPT_CREATE_DASHBOARD, True)),
+        bool(entry.options.get(OPT_DASHBOARD_ADMIN_ONLY, False)),
+    )
+
+
+async def _async_lan_entry_updated(hass: HomeAssistant, entry: SplashMeConfigEntry) -> None:
+    """Apply changed dashboard options without reloading the entry.
+
+    The dashboard generator also writes to the entry's options (its content
+    hash), which fires this listener too, so only act when the two dashboard
+    settings actually changed.
+    """
+    runtime = entry.runtime_data
+    wanted = _dashboard_options(entry)
+    if wanted == runtime.dashboard_options:
+        return
+    runtime.dashboard_options = wanted
+    await async_register_dashboard(hass, entry, runtime.coordinator)
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: SplashMeConfigEntry) -> None:

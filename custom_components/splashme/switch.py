@@ -150,7 +150,7 @@ async def _async_setup_lan_switches(hass, entry, async_add_entities) -> None:
         lambda data: {
             f"heating_{kind}": kind
             for kind, codes in HEATER_KINDS.items()
-            if data.has_equipment(codes)
+            if data.has_equipment(codes) and (kind != "spa" or data.has_spa)
         },
         lambda kind: SplashMeLanHeaterSwitch(coordinator, entry, kind),
     )
@@ -735,9 +735,12 @@ class SplashMeLanScheduleSwitch(SplashMeLanEntity, SwitchEntity):
         sched = self._schedule()
         if sched is None:
             return {}
+        aux = self.coordinator.data.aux_by_slot(sched.aux_slot)
         return {
             "schedule_num": sched.index,
             "aux_slot": sched.aux_slot,
+            "aux_name": aux.display_name if aux else None,
+            "pump_speed": sched.speed,
             "start_time": _minutes_to_hhmm(sched.start_min),
             "end_time": _minutes_to_hhmm(sched.end_min),
             "days": [

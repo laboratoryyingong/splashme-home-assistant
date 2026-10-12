@@ -18,7 +18,10 @@ from typing import Any, override
 
 from aiohttp import ClientError, ClientResponseError
 
-from homeassistant.config_entries import SOURCE_REAUTH, ConfigFlowResult
+import voluptuous as vol
+
+from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntry, ConfigFlowResult, OptionsFlow
+from homeassistant.core import callback
 from homeassistant.const import CONF_ACCESS_TOKEN, CONF_HOST, CONF_PORT, CONF_TOKEN
 from homeassistant.helpers import aiohttp_client, config_entry_oauth2_flow
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
@@ -46,6 +49,8 @@ from .const import (
     DOMAIN,
     LAN_PORT,
     OAUTH2_SCOPES,
+    OPT_CREATE_DASHBOARD,
+    OPT_DASHBOARD_ADMIN_ONLY,
 )
 from .lan import LanError, SplashMeLanClient
 
@@ -80,6 +85,13 @@ class OAuth2FlowHandler(
         return logging.getLogger(__name__)
 
     @override
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        """Options of a LAN device entry (dashboard behaviour)."""
+        del config_entry
+        return SplashMeOptionsFlow()
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -333,3 +345,31 @@ class OAuth2FlowHandler(
         if user_input is None:
             return self.async_show_form(step_id="reauth_confirm")
         return await self.async_step_user()
+
+
+class SplashMeOptionsFlow(OptionsFlow):
+    """Per-device options: whether the Pool dashboard is created and who sees it."""
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Show and save the dashboard options."""
+        entry = self.config_entry
+        if entry.data.get(CONF_CONNECTION) != CONNECTION_LAN:
+            return self.async_abort(reason="no_options")
+        if user_input is not None:
+            return self.async_create_entry(data={**entry.options, **user_input})
+        options = entry.options
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        OPT_CREATE_DASHBOARD, default=options.get(OPT_CREATE_DASHBOARD, True)
+                    ): bool,
+                    vol.Optional(
+                        OPT_DASHBOARD_ADMIN_ONLY, default=options.get(OPT_DASHBOARD_ADMIN_ONLY, False)
+                    ): bool,
+                }
+            ),
+        )

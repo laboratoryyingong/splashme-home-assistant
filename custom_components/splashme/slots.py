@@ -11,7 +11,7 @@ registry, renamed slots renamed) and the dashboard is regenerated.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Collection, Mapping
 import logging
 from typing import Any
 
@@ -46,13 +46,20 @@ class SplashMeLanSlotEntities:
         key_prefix: str,
         wanted: Callable[[SplashMeLanData], Mapping[str, Any]],
         factory: Callable[[Any], SplashMeLanEntity],
+        keys: Collection[str] | None = None,
     ) -> None:
-        """Initialize the tracker for one platform."""
+        """Initialize the tracker for one platform.
+
+        Entities are matched by unique-id prefix, or, with `keys`, by an
+        explicit set of keys (for fixed-name entities that come and go with
+        the equipment, such as the heater and dosing status sensors).
+        """
         self._hass = hass
         self._entry = entry
         self._coordinator = coordinator
         self._base = f"{lan_device_identifier(entry)}_"
         self._prefix = self._base + key_prefix
+        self._keys = frozenset(keys) if keys is not None else None
         self._wanted = wanted
         self._factory = factory
         self._platform = entity_platform.async_get_current_platform()
@@ -63,9 +70,14 @@ class SplashMeLanSlotEntities:
         wanted = self._wanted(self._coordinator.data)
         registry = er.async_get(self._hass)
         for reg in er.async_entries_for_config_entry(registry, self._entry.entry_id):
-            if reg.domain != self._platform.domain or not reg.unique_id.startswith(self._prefix):
+            if reg.domain != self._platform.domain or not reg.unique_id.startswith(self._base):
                 continue
             key = reg.unique_id[len(self._base) :]
+            if self._keys is not None:
+                if key not in self._keys:
+                    continue
+            elif not reg.unique_id.startswith(self._prefix):
+                continue
             if key in wanted:
                 live = self._live.get(key)
                 if live is not None and reg.original_name != live.name:

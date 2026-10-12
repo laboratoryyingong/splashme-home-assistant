@@ -368,8 +368,11 @@ LAN_SENSORS: tuple[tuple[str, str, str | None, SensorDeviceClass | None, str | N
     ("pump_prime_left", "Priming Remaining", UnitOfTime.SECONDS, SensorDeviceClass.DURATION, "mdi:timer-sand",
      lambda d: d.telemetry.pump_prime_remain if d.telemetry else None),
     # Drum volumes travel in mL (mobile app convention); show litres.
-    ("acid_remaining", "Acid Remaining", "L", None, "mdi:barrel-outline", lambda d: d.config.remain_acid_volume / 1000 if d.config else None),
-    ("chlorine_remaining", "Chlorine Remaining", "L", None, "mdi:barrel", lambda d: d.config.remain_chlorine_volume / 1000 if d.config else None),
+    # Unknown until a drum volume is set in the app: a bare 0 would trip "drum empty" automations.
+    ("acid_remaining", "Acid Remaining", "L", None, "mdi:barrel-outline",
+     lambda d: d.config.remain_acid_volume / 1000 if d.config and d.config.acid_drum_volume else None),
+    ("chlorine_remaining", "Chlorine Remaining", "L", None, "mdi:barrel",
+     lambda d: d.config.remain_chlorine_volume / 1000 if d.config and d.config.chlorine_drum_volume else None),
     ("ph_doses_today", "pH Doses Today", None, None, "mdi:counter", lambda d: (d.ph_settings or {}).get("current_dose_today")),
     ("chlorine_doses_today", "Chlorine Doses Today", None, None, "mdi:counter", lambda d: (d.chlorine_settings or {}).get("current_dose_today")),
 )
@@ -377,8 +380,8 @@ LAN_SENSORS: tuple[tuple[str, str, str | None, SensorDeviceClass | None, str | N
 # Non-numeric LAN sensors (no state class)
 LAN_TEXT_SENSORS: tuple[tuple[str, str, str, Any], ...] = (
     ("pump_mode", "Pump Mode", "mdi:pump", lambda d: _pump_mode_label(d.telemetry.main_pump) if d.telemetry else None),
-    ("pump_brand", "Pump Brand", "mdi:pump", lambda d: d.pump.brand if d.pump else None),
-    ("pump_model", "Pump Model", "mdi:pump", lambda d: d.pump.model if d.pump else None),
+    ("pump_brand", "Pump Brand", "mdi:pump", lambda d: (d.pump.brand or None) if d.pump else None),
+    ("pump_model", "Pump Model", "mdi:pump", lambda d: (d.pump.model or None) if d.pump else None),
     ("pump_status", "Pump Status", "mdi:pump", _pump_status),
 )
 

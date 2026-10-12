@@ -309,10 +309,27 @@ class SplashMeLanData:
         return self.has_equipment(POOL_HEATER_TYPE_CODES | SOLAR_TYPE_CODES)
 
     @property
+    def has_spa(self) -> bool:
+        """Return whether the pool has a spa: the firmware says so (an actuator pin is
+        assigned) or a spa actuator slot is present. Spa heater and light slots can be
+        assigned in the app on a pool-only install, so they alone don't count."""
+        if self.telemetry is not None and self.telemetry.flag2(pv2.FLAG2_HAS_SPA):
+            return True
+        return bool(self.spa_actuators)
+
+    @property
     def has_spa_heating(self) -> bool:
         """Return whether anything can heat the spa (solar needs a spa to heat)."""
-        return self.has_equipment(SPA_HEATER_TYPE_CODES) or (
-            self.has_equipment(SOLAR_TYPE_CODES) and self.has_equipment(SPA_ACTUATOR_TYPE_CODES)
+        return self.has_spa and (
+            self.has_equipment(SPA_HEATER_TYPE_CODES)
+            or (self.has_equipment(SOLAR_TYPE_CODES) and self.has_equipment(SPA_ACTUATOR_TYPE_CODES))
+        )
+
+    @property
+    def light_slots(self) -> tuple[SplashMeLanAux, ...]:
+        """Light slots that get entities: pool lights always, spa lights only with a spa."""
+        return tuple(
+            a for a in self.aux if a.is_light and (light_group(a.type_code) != "spa" or self.has_spa)
         )
 
     @property
@@ -364,7 +381,7 @@ class SplashMeLanData:
             for a in self.aux
         )
         schedules = tuple((s.index, s.name) for s in self.schedules if s.defined)
-        return (pump, slots, schedules)
+        return (pump, slots, schedules, self.has_spa)
 
     def schedule_by_index(self, index: int) -> pv2.Schedule | None:
         """Return the schedule with the given index."""
@@ -685,7 +702,9 @@ def lan_device_info(entry: ConfigEntry, fw_version: str | None = None) -> Device
     info = DeviceInfo(
         identifiers={(DOMAIN, lan_device_identifier(entry))},
         manufacturer=MANUFACTURER,
-        name=entry.title,
+        # A readable name gives readable entity ids (sensor.pool_controller_ph);
+        # the device id is in the serial number. Renaming in HA still wins.
+        name="Pool Controller",
         model="Pool Controller (Local)",
         serial_number=entry.data.get(CONF_DEVICE_ID) or mac,
     )
@@ -712,3 +731,29 @@ class SplashMeLanEntity(CoordinatorEntity[SplashMeLanCoordinator]):
     def unique_id_base(self) -> str:
         """Return the base for entity unique ids."""
         return lan_device_identifier(self._entry)
+
+def unfitted_keys(data: SplashMeLanData | None) -> set[str]:
+    """Entity keys of dosing and heating equipment that no output is assigned to.
+
+    Shared by the dashboard (hides their cards) and the binary sensors (not created).
+    """
+
+    def fitted(codes: frozenset[int]) -> bool:
+        return data is not None and data.has_equipment(codes)
+
+    keys: set[str] = set()
+    if not fitted(PH_DOSER_TYPE_CODES):
+        keys |= {"acid_remaining", "acid_drum_volume", "reset_acid_volume", "ph_doses_today", "ph_switch_status"}
+    if not fitted(LIQUID_CHLORINE_TYPE_CODES):  # only liquid chlorine comes in drums
+        keys |= {"chlorine_remaining", "chlorine_drum_volume", "reset_chlorine_volume", "chlorine_doses_today"}
+    if not fitted(CHLORINATOR_TYPE_CODES | LIQUID_CHLORINE_TYPE_CODES):
+        keys.add("orp_switch_status")
+    if not fitted(POOL_HEATER_TYPE_CODES):
+        keys.add("heater_state")
+    if not fitted(SPA_HEATER_TYPE_CODES) or not data.has_spa:
+        keys.add("spa_heater_state")
+    if not fitted(SOLAR_TYPE_CODES):
+        keys.add("solar_state")
+    if not fitted(POOL_HEATER_TYPE_CODES | SPA_HEATER_TYPE_CODES):  # the pump cools a heater after it stops
+        keys |= {"pump_cooldown", "pump_cooldown_left"}
+    return keys

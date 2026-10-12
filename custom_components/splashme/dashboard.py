@@ -32,7 +32,7 @@ from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.event import async_call_later
 
-from .const import CONF_DEVICE_ID, CONF_MAC, DOMAIN
+from .const import CONF_DEVICE_ID, CONF_MAC, DOMAIN, OPT_CREATE_DASHBOARD, OPT_DASHBOARD_ADMIN_ONLY
 from .lan import (
     CHLORINATOR_TYPE_CODES,
     LIQUID_CHLORINE_TYPE_CODES,
@@ -45,6 +45,7 @@ from .lan import (
     SplashMeLanCoordinator,
     SplashMeLanData,
     lan_device_identifier,
+    unfitted_keys,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -80,7 +81,7 @@ def _dashboard_item(entry: ConfigEntry) -> dict[str, Any]:
         CONF_URL_PATH: dashboard_url_path(entry),
         CONF_TITLE: "Pool",
         CONF_ICON: DASHBOARD_ICON,
-        CONF_REQUIRE_ADMIN: False,
+        CONF_REQUIRE_ADMIN: bool(entry.options.get(OPT_DASHBOARD_ADMIN_ONLY, False)),
         CONF_SHOW_IN_SIDEBAR: True,
         CONF_MODE: MODE_STORAGE,
     }
@@ -100,6 +101,11 @@ async def async_register_dashboard(
     item = _dashboard_item(entry)
     url_path = item[CONF_URL_PATH]
     dashboards = hass.data[LOVELACE_DATA].dashboards
+    if not entry.options.get(OPT_CREATE_DASHBOARD, True):
+        # Opted out: drop anything an earlier version or setting created.
+        if url_path in dashboards or url_path in hass.data.get(DATA_PANELS, {}):
+            await async_remove_dashboard(hass, entry)
+        return
     storage = dashboards.get(url_path)
     if not isinstance(storage, LovelaceStorage):
         storage = LovelaceStorage(hass, item)
@@ -111,7 +117,7 @@ async def async_register_dashboard(
         sidebar_icon=item[CONF_ICON],
         frontend_url_path=url_path,
         config={"mode": MODE_STORAGE},
-        require_admin=False,
+        require_admin=item[CONF_REQUIRE_ADMIN],
         update=url_path in hass.data.get(DATA_PANELS, {}),
     )
 
@@ -247,7 +253,7 @@ def build_dashboard_config(
 
     # Dosing and heating state entities exist whatever is fitted: only show those
     # of equipment assigned to an output.
-    unfitted = _unfitted(data)
+    unfitted = unfitted_keys(data)
     ent = {key: entity_id for key, entity_id in ent.items() if key not in unfitted}
     # Only a variable speed pump gets the speed slider. A single speed pump only
     # reads 0 or 100 %: show it on or off instead of a speed.
@@ -456,28 +462,6 @@ def _status_card(card_type: str, ent: dict[str, str], keys: dict[str, str | None
     return card
 
 
-def _unfitted(data: SplashMeLanData | None) -> set[str]:
-    """Entity keys of dosing and heating equipment that no output is assigned to."""
-
-    def fitted(codes: frozenset[int]) -> bool:
-        return data is not None and data.has_equipment(codes)
-
-    keys: set[str] = set()
-    if not fitted(PH_DOSER_TYPE_CODES):
-        keys |= {"acid_remaining", "acid_drum_volume", "reset_acid_volume", "ph_doses_today", "ph_switch_status"}
-    if not fitted(LIQUID_CHLORINE_TYPE_CODES):  # only liquid chlorine comes in drums
-        keys |= {"chlorine_remaining", "chlorine_drum_volume", "reset_chlorine_volume", "chlorine_doses_today"}
-    if not fitted(CHLORINATOR_TYPE_CODES | LIQUID_CHLORINE_TYPE_CODES):
-        keys.add("orp_switch_status")
-    if not fitted(POOL_HEATER_TYPE_CODES):
-        keys.add("heater_state")
-    if not fitted(SPA_HEATER_TYPE_CODES):
-        keys.add("spa_heater_state")
-    if not fitted(SOLAR_TYPE_CODES):
-        keys.add("solar_state")
-    if not fitted(POOL_HEATER_TYPE_CODES | SPA_HEATER_TYPE_CODES):  # the pump cools a heater after it stops
-        keys |= {"pump_cooldown", "pump_cooldown_left"}
-    return keys
 
 
 def _orp_target_key(data: SplashMeLanData | None) -> str:

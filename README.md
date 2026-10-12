@@ -96,6 +96,10 @@ Signing in is needed once. The SplashMe cloud is only used during setup to
 confirm which controllers belong to you; afterwards the integration talks to
 the controller directly.
 
+Each controller gets a ready-made **Pool** dashboard in the sidebar. On the
+controller's entry, **Configure** lets you turn the dashboard off or show it
+to administrators only (useful for wall tablets and guest accounts).
+
 ## Troubleshooting
 
 **After signing in, the browser lands on a page that cannot be reached

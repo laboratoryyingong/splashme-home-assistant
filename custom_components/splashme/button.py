@@ -39,8 +39,7 @@ async def async_setup_entry(
             "light_",
             lambda data: {
                 f"light_{aux.slot}_{action.key}": (aux.slot, action)
-                for aux in data.aux
-                if aux.is_light
+                for aux in data.light_slots
                 for action in LIGHT_ACTIONS.get(data.light_type(aux.slot), ())
             },
             lambda spec: SplashMeLanLightActionButton(coordinator, entry, *spec),

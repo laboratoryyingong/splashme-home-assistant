@@ -53,5 +53,23 @@
     "progress": {
       "scan_lan": "Scanning the local network for {paired_count} paired device(s). This takes a few seconds…"
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "SplashMe options",
+        "data": {
+          "create_dashboard": "Create the Pool dashboard",
+          "dashboard_admin_only": "Show the Pool dashboard to administrators only"
+        },
+        "data_description": {
+          "create_dashboard": "A ready-made dashboard for this controller in the sidebar. Turn off to remove it; your own dashboards are not affected.",
+          "dashboard_admin_only": "Hide the dashboard, and the pool controls on it, from non-administrator users such as wall tablets."
+        }
+      }
+    },
+    "abort": {
+      "no_options": "This entry has no options."
+    }
   }
 }

@@ -12,7 +12,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from . import SplashMeConfigEntry, is_lan_entry
 from . import pv2
 from .entity import SplashMeDeviceEntity
-from .lan import SplashMeLanEntity
+from .lan import CHLORINATOR_TYPE_CODES, LIQUID_CHLORINE_TYPE_CODES, SplashMeLanEntity, unfitted_keys
 from .slots import SplashMeLanSlotEntities
 
 # LAN binary sensors off the state frame flags: (key, name, device_class, icon, value fn)
@@ -29,6 +29,10 @@ LAN_BINARY_SENSORS: tuple[tuple[str, str, BinarySensorDeviceClass | None, str | 
     ("pump_cooldown", "Heater Cooldown", BinarySensorDeviceClass.RUNNING, "mdi:fan-clock", lambda t: t.flag2(pv2.FLAG2_PUMP_COOLING)),
     ("pump_priming", "Pump Priming", BinarySensorDeviceClass.RUNNING, "mdi:water-pump", lambda t: t.flag2(pv2.FLAG2_PUMP_PRIMING)),
 )
+# Created only when the matching equipment is assigned (see lan.unfitted_keys).
+LAN_EQUIPMENT_SENSOR_KEYS = frozenset(
+    {"heater_state", "solar_state", "spa_heater_state", "ph_switch_status", "orp_switch_status", "pump_cooldown"}
+)
 
 
 async def async_setup_entry(
@@ -42,9 +46,28 @@ async def async_setup_entry(
         entities: list[BinarySensorEntity] = [
             SplashMeLanBinarySensor(coordinator, entry, key, name, device_class, icon, fn)
             for key, name, device_class, icon, fn in LAN_BINARY_SENSORS
+            if key not in LAN_EQUIPMENT_SENSOR_KEYS
         ]
         entities.append(SplashMeLanConnectivityBinarySensor(coordinator, entry))
         async_add_entities(entities)
+        # Heater, solar, dosing and cooldown status only for equipment the
+        # controller has assigned (and a spa heater only with a spa), following
+        # changes made in the app.
+        equipment = SplashMeLanSlotEntities(
+            hass,
+            entry,
+            coordinator,
+            "",
+            lambda data: {
+                spec[0]: spec
+                for spec in LAN_BINARY_SENSORS
+                if spec[0] in LAN_EQUIPMENT_SENSOR_KEYS and spec[0] not in unfitted_keys(data)
+            },
+            lambda spec: SplashMeLanBinarySensor(coordinator, entry, *spec),
+            keys=LAN_EQUIPMENT_SENSOR_KEYS,
+        )
+        await equipment.async_sync()
+        entry.runtime_data.slot_entities.append(equipment)
         # One connectivity sensor per LoRa expander board that has equipment
         # assigned (flags bits 10/11 for boards 1-2, flags2 bits 7/8 for 3-4),
         # following slot assignment.
@@ -129,6 +152,7 @@ class SplashMeLanBinarySensor(SplashMeLanEntity, BinarySensorEntity):
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator, entry)
+        self._key = key
         self._value_fn = value_fn
         self._attr_unique_id = f"{self.unique_id_base}_{key}"
         self._attr_name = name
@@ -136,6 +160,23 @@ class SplashMeLanBinarySensor(SplashMeLanEntity, BinarySensorEntity):
             self._attr_device_class = device_class
         if icon is not None:
             self._attr_icon = icon
+
+    @property
+    def name(self) -> str | None:
+        """The ORP output is a chlorinator cell on salt/mineral pools, a dose on liquid ones."""
+        if self._key == "orp_switch_status":
+            data = self.coordinator.data
+            if data.has_equipment(CHLORINATOR_TYPE_CODES) and not data.has_equipment(LIQUID_CHLORINE_TYPE_CODES):
+                return "Chlorinator Running"
+        return self._attr_name
+
+    @property
+    def available(self) -> bool:
+        """Chemistry can only be judged with water flowing past the probes."""
+        if self._key == "chemistry_stable":
+            telemetry = self.coordinator.data.telemetry
+            return super().available and telemetry is not None and telemetry.flow > 0
+        return super().available
 
     @property
     def is_on(self) -> bool | None:

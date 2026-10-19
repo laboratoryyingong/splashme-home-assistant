@@ -50,7 +50,13 @@ LAN_PORT = 8080
 OPT_LAN_PUMP_SPEED_SETPOINT = "pump_speed_setpoint"
 # Options flow of a LAN entry (dashboard behaviour)
 OPT_CREATE_DASHBOARD = "create_dashboard"
-OPT_DASHBOARD_ADMIN_ONLY = "dashboard_admin_only"
+OPT_DASHBOARD_ADMIN_ONLY = "dashboard_admin_only"  # v0.1.11, replaced by OPT_DASHBOARD_MODE
+OPT_DASHBOARD_MODE = "dashboard_mode"
+DASHBOARD_FULL = "full"
+DASHBOARD_BASIC = "basic"
+DASHBOARD_BASIC_USERS_FULL_ADMINS = "basic_users_full_admins"
+DASHBOARD_FULL_ADMINS_ONLY = "full_admins_only"
+DASHBOARD_MODES = (DASHBOARD_FULL, DASHBOARD_BASIC, DASHBOARD_BASIC_USERS_FULL_ADMINS, DASHBOARD_FULL_ADMINS_ONLY)
 LAN_TIMEOUT_SECONDS = 10
 LAN_SCAN_INTERVAL_SECONDS = 15
 # After a write, poll faster for a while so flow, power and speed are seen

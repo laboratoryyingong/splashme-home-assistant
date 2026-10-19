@@ -44,9 +44,8 @@ from .const import (
     PLATFORMS,
     PLATFORMS_LAN,
     OPT_CREATE_DASHBOARD,
-    OPT_DASHBOARD_ADMIN_ONLY,
 )
-from .dashboard import async_register_dashboard, async_remove_dashboard, async_track_renames
+from .dashboard import async_register_dashboard, async_remove_dashboard, async_track_renames, dashboard_mode
 from .coordinator import SplashMeDataCoordinator, SplashMeDevice
 from .lan import SplashMeLanClient, SplashMeLanCoordinator
 from .slots import SplashMeLanSlotEntities, async_track_equipment
@@ -69,7 +68,7 @@ class SplashMeLanRuntimeData:
     client: SplashMeLanClient
     coordinator: SplashMeLanCoordinator
     slot_entities: list[SplashMeLanSlotEntities] = field(default_factory=list)
-    dashboard_options: tuple[bool, bool] | None = None
+    dashboard_options: tuple[bool, str] | None = None  # (create, mode)
 
 
 SplashMeConfigEntry = ConfigEntry[
@@ -177,11 +176,8 @@ async def _async_setup_lan_entry(
     return True
 
 
-def _dashboard_options(entry: ConfigEntry) -> tuple[bool, bool]:
-    return (
-        bool(entry.options.get(OPT_CREATE_DASHBOARD, True)),
-        bool(entry.options.get(OPT_DASHBOARD_ADMIN_ONLY, False)),
-    )
+def _dashboard_options(entry: ConfigEntry) -> tuple[bool, str]:
+    return (bool(entry.options.get(OPT_CREATE_DASHBOARD, True)), dashboard_mode(entry))
 
 
 async def _async_lan_entry_updated(hass: HomeAssistant, entry: SplashMeConfigEntry) -> None:

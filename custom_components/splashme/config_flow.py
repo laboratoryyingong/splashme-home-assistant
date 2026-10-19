@@ -24,6 +24,7 @@ from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntry, ConfigFlowR
 from homeassistant.core import callback
 from homeassistant.const import CONF_ACCESS_TOKEN, CONF_HOST, CONF_PORT, CONF_TOKEN
 from homeassistant.helpers import aiohttp_client, config_entry_oauth2_flow
+from homeassistant.helpers.selector import SelectSelector, SelectSelectorConfig, SelectSelectorMode
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from .account import (
@@ -49,9 +50,12 @@ from .const import (
     DOMAIN,
     LAN_PORT,
     OAUTH2_SCOPES,
+    DASHBOARD_MODES,
     OPT_CREATE_DASHBOARD,
     OPT_DASHBOARD_ADMIN_ONLY,
+    OPT_DASHBOARD_MODE,
 )
+from .dashboard import dashboard_mode
 from .lan import LanError, SplashMeLanClient
 
 _KEY_RE = re.compile(r"^[0-9a-fA-F]{32}$")
@@ -348,7 +352,7 @@ class OAuth2FlowHandler(
 
 
 class SplashMeOptionsFlow(OptionsFlow):
-    """Per-device options: whether the Pool dashboard is created and who sees it."""
+    """Per-device options: whether the Pool dashboard is created, its layout and who sees it."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -358,7 +362,9 @@ class SplashMeOptionsFlow(OptionsFlow):
         if entry.data.get(CONF_CONNECTION) != CONNECTION_LAN:
             return self.async_abort(reason="no_options")
         if user_input is not None:
-            return self.async_create_entry(data={**entry.options, **user_input})
+            # The v0.1.11 administrators-only switch is folded into the dashboard mode.
+            kept = {k: v for k, v in entry.options.items() if k != OPT_DASHBOARD_ADMIN_ONLY}
+            return self.async_create_entry(data={**kept, **user_input})
         options = entry.options
         return self.async_show_form(
             step_id="init",
@@ -367,9 +373,13 @@ class SplashMeOptionsFlow(OptionsFlow):
                     vol.Optional(
                         OPT_CREATE_DASHBOARD, default=options.get(OPT_CREATE_DASHBOARD, True)
                     ): bool,
-                    vol.Optional(
-                        OPT_DASHBOARD_ADMIN_ONLY, default=options.get(OPT_DASHBOARD_ADMIN_ONLY, False)
-                    ): bool,
+                    vol.Optional(OPT_DASHBOARD_MODE, default=dashboard_mode(entry)): SelectSelector(
+                        SelectSelectorConfig(
+                            options=list(DASHBOARD_MODES),
+                            translation_key="dashboard_mode",
+                            mode=SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
                 }
             ),
         )

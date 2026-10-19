@@ -60,16 +60,26 @@
         "title": "SplashMe options",
         "data": {
           "create_dashboard": "Create the Pool dashboard",
-          "dashboard_admin_only": "Show the Pool dashboard to administrators only"
+          "dashboard_mode": "Pool dashboard"
         },
         "data_description": {
           "create_dashboard": "A ready-made dashboard for this controller in the sidebar. Turn off to remove it; your own dashboards are not affected.",
-          "dashboard_admin_only": "Hide the dashboard, and the pool controls on it, from non-administrator users such as wall tablets."
+          "dashboard_mode": "Full shows everything the controller has: dosing, chemistry, schedules and trends. Basic only has the pump, heating, lights, other outputs and the water temperature. \"Basic for users, full for administrators\" adds a Pool Admin dashboard that only administrators see. A dashboard hides controls; it does not stop a signed-in user from using the entities elsewhere."
         }
       }
     },
     "abort": {
       "no_options": "This entry has no options."
+    }
+  },
+  "selector": {
+    "dashboard_mode": {
+      "options": {
+        "full": "Full dashboard for everyone",
+        "basic": "Basic dashboard for everyone",
+        "basic_users_full_admins": "Basic for users, full for administrators",
+        "full_admins_only": "Full dashboard for administrators only"
+      }
     }
   }
 }

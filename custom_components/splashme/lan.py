@@ -213,8 +213,12 @@ class SplashMeLanAux:
 
     @property
     def display_name(self) -> str:
-        """Return the preferred display name."""
-        return self.name or f"Aux {self.slot}"
+        """Return the preferred display name (an unnamed pump slot is the filter pump)."""
+        if self.name:
+            return self.name
+        if self.type_code == MAIN_PUMP_TYPE_CODE:
+            return "Filter Pump"
+        return f"Aux {self.slot}"
 
     @property
     def is_light(self) -> bool:
@@ -327,10 +331,8 @@ class SplashMeLanData:
 
     @property
     def light_slots(self) -> tuple[SplashMeLanAux, ...]:
-        """Light slots that get entities: pool lights always, spa lights only with a spa."""
-        return tuple(
-            a for a in self.aux if a.is_light and (light_group(a.type_code) != "spa" or self.has_spa)
-        )
+        """Every light slot: a "Spa Lights" slot on a pool-only controller is still a light."""
+        return tuple(a for a in self.aux if a.is_light)
 
     @property
     def spa_actuators(self) -> tuple[SplashMeLanAux, ...]:

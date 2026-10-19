@@ -97,8 +97,40 @@ confirm which controllers belong to you; afterwards the integration talks to
 the controller directly.
 
 Each controller gets a ready-made **Pool** dashboard in the sidebar. On the
-controller's entry, **Configure** lets you turn the dashboard off or show it
-to administrators only (useful for wall tablets and guest accounts).
+controller's entry, **Configure** lets you turn it off or choose what it
+shows and to whom:
+
+- **Full dashboard for everyone** (default): dosing drums, chemistry,
+  schedules, filtration, heating, every output, and a Trends tab.
+- **Basic dashboard for everyone**: just the pump, heating, lights, the other
+  outputs (jets, blower, ...) and the water temperature.
+- **Basic for users, full for administrators**: a basic **Pool** for the
+  household and a full **Pool Admin** that only administrators see.
+- **Full dashboard for administrators only**: useful for wall tablets and
+  guest accounts.
+
+A dashboard only hides controls. Home Assistant has no per-user permissions
+on entities, so any signed-in user can still use them from scripts,
+automations or the developer tools.
+
+## Apple Home and Google Home
+
+The integration does not talk to Apple Home or Google Home itself; use Home
+Assistant's **HomeKit Bridge** or **Google Assistant** integration and pick
+the SplashMe entities to expose. A small set works best for a household:
+
+| Include | Shows up as |
+|---|---|
+| The pump's switch (**Filter Pump**, or the name you gave that output) | Switch |
+| The heating switches (**Pool Heater**, **Spa Heater**, **Solar Heater**) | Switch |
+| `light.*` entities | Light |
+| Switches of outputs you use by hand: jets, blower, waterfall, ... | Switch |
+| **Water Temperature** | Temperature sensor |
+
+Leave out the dosing switches, schedule switches, the settings numbers and
+the buttons: they are maintenance settings or one-shot commands, not
+accessories. The dashboard options above do not affect what the bridge sees;
+it has its own include list.
 
 ## Troubleshooting
 
@@ -130,6 +162,14 @@ sensors keep the last reading taken while the pump was running, and update
 again once it has been running for about 2 minutes (**Chemistry Stable** turns
 on). Flow rate and pressure stay live, so they show the pump is off. Right
 after installing, the held sensors read "unknown" until the pump has run once.
+
+**Acid Remaining or Chlorine Remaining is wrong, or does not go down after a dose.**
+The controller only counts a dose down from a valid drum volume. A drum volume
+entered with an old version of the SplashMe app can be stored in the wrong
+unit (it then reads as something like 0.014 L). Set **Acid Drum Volume** to the
+drum size, then set **Acid Remaining** (**Settings → Devices & services →
+SplashMe →** your controller, under Configuration) to what is actually left.
+**Reset Acid Volume** sets it back to a full drum. Chlorine works the same way.
 
 **The dashboard has no heater dial.**
 The target temperature dial appears when the heater's output is set up as

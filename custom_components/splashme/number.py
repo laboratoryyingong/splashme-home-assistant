@@ -28,6 +28,7 @@ class SplashMeNumberSpec:
     step: float
     scale: float  # raw = value * scale
     icon: str
+    depends_on: str | None = None  # unknown while this field is 0 (drum volume not set up)
 
 
 NUMBER_SPECS: tuple[SplashMeNumberSpec, ...] = (
@@ -86,7 +87,43 @@ NUMBER_SPECS: tuple[SplashMeNumberSpec, ...] = (
         scale=1000,  # device stores mL (mobile app convention)
         icon="mdi:barrel",
     ),
+    # The controller only counts a dose down from a valid remaining amount, and
+    # the reset button refills to the full drum; these set what is really left.
+    SplashMeNumberSpec(
+        field="remain_acid_volume",
+        name="Acid Remaining",
+        kind="ph",
+        unit="L",
+        min_value=0,
+        max_value=1000,
+        step=0.01,
+        scale=1000,
+        icon="mdi:barrel-outline",
+        depends_on="acid_drum_volume",
+    ),
+    SplashMeNumberSpec(
+        field="remain_chlorine_volume",
+        name="Chlorine Remaining",
+        kind="chlorine",
+        unit="L",
+        min_value=0,
+        max_value=1000,
+        step=0.01,
+        scale=1000,
+        icon="mdi:barrel",
+        depends_on="chlorine_drum_volume",
+    ),
 )
+
+
+def _spec_value(spec: SplashMeNumberSpec, settings: dict | None) -> float | None:
+    """Scaled value of the spec's field, unknown until its drum volume is set."""
+    if settings is None:
+        return None
+    if spec.depends_on and not settings.get(spec.depends_on):
+        return None
+    raw = settings.get(spec.field)
+    return None if raw is None else raw / spec.scale
 
 
 SINGLE_SPEED_PUMP_BRAND = "Single Speed"
@@ -211,9 +248,7 @@ class SplashMeLanSettingsNumber(SplashMeLanEntity, NumberEntity):
     @property
     def native_value(self) -> float | None:
         """Return the current setting value."""
-        settings = self._settings()
-        raw = None if settings is None else settings.get(self._spec.field)
-        return None if raw is None else raw / self._spec.scale
+        return _spec_value(self._spec, self._settings())
 
     async def async_set_native_value(self, value: float) -> None:
         """Write the new setting value."""
@@ -339,11 +374,7 @@ class SplashMeSettingsNumber(SplashMeDeviceEntity, NumberEntity):
     @property
     def native_value(self) -> float | None:
         """Return the current setting value."""
-        settings = self._settings()
-        if settings is None:
-            return None
-        raw = settings.get(self._spec.field)
-        return None if raw is None else raw / self._spec.scale
+        return _spec_value(self._spec, self._settings())
 
     async def async_set_native_value(self, value: float) -> None:
         """Write the new setting value."""

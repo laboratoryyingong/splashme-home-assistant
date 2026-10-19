@@ -5,6 +5,12 @@ entry loads and deleted when the entry is removed, so uninstalling the
 integration leaves nothing behind in the sidebar. The layout is generated
 from the device's entities; once the user edits it in the UI it is left
 alone (the generated version is recognised by its hash).
+
+Two layouts exist: the full one with dosing, chemistry, schedules and trends
+for whoever maintains the pool, and a basic one with just the pump, heating,
+lights, other outputs and the water temperature. The entry's options pick one
+for the Pool dashboard, or a basic Pool for everyone plus a full Pool Admin
+dashboard that only administrators see.
 """
 
 from __future__ import annotations
@@ -32,7 +38,18 @@ from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.event import async_call_later
 
-from .const import CONF_DEVICE_ID, CONF_MAC, DOMAIN, OPT_CREATE_DASHBOARD, OPT_DASHBOARD_ADMIN_ONLY
+from .const import (
+    CONF_DEVICE_ID,
+    CONF_MAC,
+    DASHBOARD_BASIC,
+    DASHBOARD_BASIC_USERS_FULL_ADMINS,
+    DASHBOARD_FULL,
+    DASHBOARD_FULL_ADMINS_ONLY,
+    DOMAIN,
+    OPT_CREATE_DASHBOARD,
+    OPT_DASHBOARD_ADMIN_ONLY,
+    OPT_DASHBOARD_MODE,
+)
 from .lan import (
     CHLORINATOR_TYPE_CODES,
     LIQUID_CHLORINE_TYPE_CODES,
@@ -75,16 +92,44 @@ def _device_label(hass: HomeAssistant, entry: ConfigEntry) -> str:
     return f"SplashMe_{device_id.replace('_', '')}" if device_id else entry.title
 
 
-def _dashboard_item(entry: ConfigEntry) -> dict[str, Any]:
+def dashboard_mode(entry: ConfigEntry) -> str:
+    """The dashboard choice; "administrators only" from v0.1.11 is the full layout for admins."""
+    mode = entry.options.get(OPT_DASHBOARD_MODE)
+    if mode:
+        return mode
+    return DASHBOARD_FULL_ADMINS_ONLY if entry.options.get(OPT_DASHBOARD_ADMIN_ONLY) else DASHBOARD_FULL
+
+
+def _wanted_dashboards(entry: ConfigEntry) -> list[tuple[bool, str]]:
+    """(admin dashboard?, layout) for each dashboard the options ask for."""
+    mode = dashboard_mode(entry)
+    if mode == DASHBOARD_BASIC:
+        return [(False, DASHBOARD_BASIC)]
+    if mode == DASHBOARD_BASIC_USERS_FULL_ADMINS:
+        return [(False, DASHBOARD_BASIC), (True, DASHBOARD_FULL)]
+    return [(False, DASHBOARD_FULL)]
+
+
+def _dashboard_item(entry: ConfigEntry, admin: bool = False) -> dict[str, Any]:
+    """The Pool dashboard, or the Pool Admin one that goes with a basic Pool."""
+    suffix = "-admin" if admin else ""
     return {
-        CONF_ID: f"splashme_{_short_id(entry)}",
-        CONF_URL_PATH: dashboard_url_path(entry),
-        CONF_TITLE: "Pool",
+        CONF_ID: f"splashme_{_short_id(entry)}{suffix.replace('-', '_')}",
+        CONF_URL_PATH: f"{dashboard_url_path(entry)}{suffix}",
+        CONF_TITLE: "Pool Admin" if admin else "Pool",
         CONF_ICON: DASHBOARD_ICON,
-        CONF_REQUIRE_ADMIN: bool(entry.options.get(OPT_DASHBOARD_ADMIN_ONLY, False)),
+        CONF_REQUIRE_ADMIN: admin or dashboard_mode(entry) == DASHBOARD_FULL_ADMINS_ONLY,
         CONF_SHOW_IN_SIDEBAR: True,
         CONF_MODE: MODE_STORAGE,
     }
+
+
+def _hash_option(admin: bool) -> str:
+    return f"{OPT_DASHBOARD_HASH}_admin" if admin else OPT_DASHBOARD_HASH
+
+
+def _present(hass: HomeAssistant, url_path: str) -> bool:
+    return url_path in hass.data[LOVELACE_DATA].dashboards or url_path in hass.data.get(DATA_PANELS, {})
 
 
 def _config_hash(config: dict[str, Any]) -> str:
@@ -94,18 +139,27 @@ def _config_hash(config: dict[str, Any]) -> str:
 async def async_register_dashboard(
     hass: HomeAssistant, entry: ConfigEntry, coordinator: SplashMeLanCoordinator, *, reset: bool = False
 ) -> None:
-    """Create or refresh the entry's dashboard and its sidebar panel.
+    """Create or refresh the entry's dashboard(s) and their sidebar panels.
 
     reset: overwrite a dashboard the user edited, so it is generated again.
     """
-    item = _dashboard_item(entry)
+    wanted = _wanted_dashboards(entry) if entry.options.get(OPT_CREATE_DASHBOARD, True) else []
+    # Drop what an earlier version or setting created and the options no longer ask for.
+    for admin in (False, True):
+        item = _dashboard_item(entry, admin)
+        if not any(a == admin for a, _layout in wanted) and _present(hass, item[CONF_URL_PATH]):
+            await _async_remove_one(hass, item)
+    for admin, layout in wanted:
+        await _async_register_one(hass, entry, coordinator, admin, layout, reset)
+
+
+async def _async_register_one(
+    hass: HomeAssistant, entry: ConfigEntry, coordinator: SplashMeLanCoordinator, admin: bool, layout: str, reset: bool
+) -> None:
+    item = _dashboard_item(entry, admin)
     url_path = item[CONF_URL_PATH]
+    hash_option = _hash_option(admin)
     dashboards = hass.data[LOVELACE_DATA].dashboards
-    if not entry.options.get(OPT_CREATE_DASHBOARD, True):
-        # Opted out: drop anything an earlier version or setting created.
-        if url_path in dashboards or url_path in hass.data.get(DATA_PANELS, {}):
-            await async_remove_dashboard(hass, entry)
-        return
     storage = dashboards.get(url_path)
     if not isinstance(storage, LovelaceStorage):
         storage = LovelaceStorage(hass, item)
@@ -121,27 +175,31 @@ async def async_register_dashboard(
         update=url_path in hass.data.get(DATA_PANELS, {}),
     )
 
-    generated = build_dashboard_config(hass, entry, coordinator)
+    generated = build_dashboard_config(hass, entry, coordinator, layout)
     try:
         current = await storage.async_load(False)
     except ConfigNotFound:
         current = None
     if current is not None and not reset:
-        if _config_hash(current) != entry.options.get(OPT_DASHBOARD_HASH):
+        if _config_hash(current) != entry.options.get(hash_option):
             # Edited by the user in the UI: keep their version.
             return
         if _config_hash(current) == _config_hash(generated):
             return
     await storage.async_save(generated)
     hass.config_entries.async_update_entry(
-        entry, options={**entry.options, OPT_DASHBOARD_HASH: _config_hash(generated)}
+        entry, options={**entry.options, hash_option: _config_hash(generated)}
     )
-    _LOGGER.info("Dashboard /%s generated for %s", url_path, entry.title)
+    _LOGGER.info("Dashboard /%s (%s layout) generated for %s", url_path, layout, entry.title)
 
 
 async def async_remove_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Delete the entry's dashboard, its stored config and sidebar panel."""
-    item = _dashboard_item(entry)
+    """Delete the entry's dashboards, their stored config and sidebar panels."""
+    for admin in (False, True):
+        await _async_remove_one(hass, _dashboard_item(entry, admin))
+
+
+async def _async_remove_one(hass: HomeAssistant, item: dict[str, Any]) -> None:
     url_path = item[CONF_URL_PATH]
     lovelace = hass.data.get(LOVELACE_DATA)
     storage = lovelace.dashboards.pop(url_path, None) if lovelace else None
@@ -149,7 +207,7 @@ async def async_remove_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> Non
     if not isinstance(storage, LovelaceStorage):
         storage = LovelaceStorage(hass, item)
     await storage.async_delete()
-    _LOGGER.info("Dashboard /%s removed with %s", url_path, entry.title)
+    _LOGGER.info("Dashboard /%s removed", url_path)
 
 
 @callback
@@ -239,9 +297,9 @@ def _heading(text: str, icon: str) -> dict[str, Any]:
 
 
 def build_dashboard_config(
-    hass: HomeAssistant, entry: ConfigEntry, coordinator: SplashMeLanCoordinator
+    hass: HomeAssistant, entry: ConfigEntry, coordinator: SplashMeLanCoordinator, layout: str = DASHBOARD_FULL
 ) -> dict[str, Any]:
-    """Generate the sections layout from the device's current entities."""
+    """Generate the sections layout (full or basic) from the device's current entities."""
     entries = _registry_entries(hass, entry)
     ent = {key: e.entity_id for key, e in entries.items()}
     data = coordinator.data
@@ -271,6 +329,62 @@ def build_dashboard_config(
     def tiles(*specs: tuple[str, str | None]) -> list[dict[str, Any]]:
         return [_tile(ent[key], name) for key, name in specs if key in ent]
 
+    heating_tabs = [
+        tab for tab in (
+            _heater_tab(ent, "Pool", "heating_pool_target", (
+                ("Pool Heater", "heating_pool", "heater_state"),
+                ("Solar Heater", "heating_solar", "solar_state"),
+            )),
+            _heater_tab(ent, "Spa", "heating_spa_target", (
+                ("Spa Heater", "heating_spa", "spa_heater_state"),
+                ("Solar Heater", "heating_solar", "solar_state"),
+            )),
+        ) if tab
+    ]
+    aux_heater_tiles = [_toggle_tile(ent[f"aux_{a.slot}"], aux_name(a, f"aux_{a.slot}")) for a in aux_heaters]
+    light_tiles = [
+        _toggle_tile(ent[f"light_{a.slot}"], aux_name(a, f"light_{a.slot}"))
+        for a in aux if a.is_light and f"light_{a.slot}" in ent
+    ]
+    pump_tiles: list[dict[str, Any]] = []
+    if pump is not None and f"aux_{pump.slot}" in ent:
+        pump_tiles.append(_toggle_tile(ent[f"aux_{pump.slot}"], "Filter Pump"))
+    if "spa_mode" in ent:
+        pump_tiles.append(_toggle_tile(ent["spa_mode"], "Spa Mode"))
+    if "pump_speed_setpoint" in ent:
+        pump_tiles.append(
+            _tile(ent["pump_speed_setpoint"], "Filter Pump Speed",
+                  features=[{"type": "numeric-input", "style": "slider"}])
+        )
+
+    if layout == DASHBOARD_BASIC:
+        # -- Basic: what a household switches day to day, nothing to maintain the pool with --
+        if heating_tabs:
+            heating = [_heater_card(ent, heating_tabs)]
+        else:
+            heating = tiles(("water_temp", "Water Temperature"))
+        heating += aux_heater_tiles
+        if heating_tabs or aux_heaters:
+            heating.insert(0, _heading("Heating", "mdi:fire"))
+        else:
+            heating.insert(0, _heading("Temperature", "mdi:thermometer"))
+        outputs = [
+            _toggle_tile(ent[f"aux_{a.slot}"], aux_name(a, f"aux_{a.slot}"))
+            for a in aux
+            if a is not pump and not a.is_light and a not in aux_heaters and f"aux_{a.slot}" in ent
+        ]
+        equipment = [_heading("Equipment", "mdi:pool-thermometer"), *pump_tiles, *light_tiles, *outputs]
+        return {
+            "title": _device_label(hass, entry),
+            "views": [{
+                "title": "Pool",
+                "path": "pool",
+                "type": "sections",
+                "max_columns": 2,
+                "sections": [{"type": "grid", "cards": equipment}, {"type": "grid", "cards": heating}],
+            }],
+        }
+
     # -- Dosing drums ------------------------------------------------------
     drums: list[dict[str, Any]] = []
     for kind, label, color in (("acid", "Acid", "#ef6c00"), ("chlorine", "Chlorine", None)):
@@ -294,26 +408,12 @@ def build_dashboard_config(
         drums.insert(0, _heading("Dosing Drums", "mdi:barrel"))
 
     # -- Heating (temperature dials, or the temperatures without heating equipment) --
-    heating_tabs = [
-        tab for tab in (
-            _heater_tab(ent, "Pool", "heating_pool_target", (
-                ("Pool Heater", "heating_pool", "heater_state"),
-                ("Solar Heater", "heating_solar", "solar_state"),
-            )),
-            _heater_tab(ent, "Spa", "heating_spa_target", (
-                ("Spa Heater", "heating_spa", "spa_heater_state"),
-                ("Solar Heater", "heating_solar", "solar_state"),
-            )),
-        ) if tab
-    ]
     if heating_tabs:
-        heating = [_status_card("custom:splashme-heater-card", ent, {
-            "water_entity": "water_temp", "ambient_entity": "solar_temp",
-        }) | {"tabs": heating_tabs}]
+        heating = [_heater_card(ent, heating_tabs)]
     else:
         # The heater card shows these otherwise.
         heating = tiles(("water_temp", "Water Temperature"), ("solar_temp", "Ambient Temperature"))
-    heating += [_toggle_tile(ent[f"aux_{a.slot}"], aux_name(a, f"aux_{a.slot}")) for a in aux_heaters]
+    heating += aux_heater_tiles
     if heating:
         if heating_tabs or aux_heaters:
             heading = _heading("Heating", "mdi:fire")
@@ -361,20 +461,9 @@ def build_dashboard_config(
         ]
 
     # -- Equipment -----------------------------------------------------------
-    equipment: list[dict[str, Any]] = [_heading("Equipment", "mdi:pool-thermometer")]
-    if pump is not None and f"aux_{pump.slot}" in ent:
-        equipment.append(_toggle_tile(ent[f"aux_{pump.slot}"], "Filter Pump"))
-    if "spa_mode" in ent:
-        equipment.append(_toggle_tile(ent["spa_mode"], "Spa Mode"))
-    if "pump_speed_setpoint" in ent:
-        equipment.append(
-            _tile(ent["pump_speed_setpoint"], "Filter Pump Speed",
-                  features=[{"type": "numeric-input", "style": "slider"}])
-        )
+    equipment: list[dict[str, Any]] = [_heading("Equipment", "mdi:pool-thermometer"), *pump_tiles]
     equipment += tiles(("pump_cooldown", "Heater Cooldown"), ("pump_cooldown_left", "Cooldown Remaining"))
-    for a in aux:
-        if a.is_light and f"light_{a.slot}" in ent:
-            equipment.append(_toggle_tile(ent[f"light_{a.slot}"], aux_name(a, f"light_{a.slot}")))
+    equipment += light_tiles
     for a in aux:
         if (a is not pump and not a.is_light and not a.is_pump_linked and a not in aux_heaters
                 and f"aux_{a.slot}" in ent):
@@ -462,6 +551,12 @@ def _status_card(card_type: str, ent: dict[str, str], keys: dict[str, str | None
     return card
 
 
+
+
+def _heater_card(ent: dict[str, str], heating_tabs: list[dict[str, Any]]) -> dict[str, Any]:
+    return _status_card("custom:splashme-heater-card", ent, {
+        "water_entity": "water_temp", "ambient_entity": "solar_temp",
+    }) | {"tabs": heating_tabs}
 
 
 def _orp_target_key(data: SplashMeLanData | None) -> str:

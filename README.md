@@ -48,8 +48,13 @@ home.
 - **Pump**: on/off, speed, mode, start-up status (starting, priming with a
   countdown), flow rate, brand.
 - **Heater** and **auxiliary outputs** (lights and other relays).
-- **Schedules**: `splashme.create_schedule`, `splashme.update_schedule`,
-  `splashme.delete_schedule` services to manage the controller's pool schedules.
+- **Schedules**: one switch per schedule on the controller, plus
+  `splashme.create_schedule`, `splashme.update_schedule` and
+  `splashme.delete_schedule` services. A pump schedule with *Linked Devices*
+  in the app (ozone, UV, ioniser, cleaner) is stored as one record per device
+  with the same times; the pump schedule's switch lists them as
+  `linked_devices`, toggles them with it, and the dashboard shows only the
+  pump schedule, as the app does.
 - **SplashMe dashboard**: a ready-made sidebar panel with tank, heater and
   chemistry cards, generated for each controller from the equipment it has,
   and a Trends tab with the history graphs.
@@ -144,6 +149,12 @@ your Home Assistant's IP address with port 8123), save, then add the
 integration again. To rescue the current attempt instead, edit the address
 in the browser bar: replace the host with your Home Assistant address and
 keep everything after `/auth/external/callback` unchanged.
+
+**Every card on the Pool dashboard says "Configuration error" right after
+installing or upgrading.**
+The dashboard uses the integration's own cards, and a browser page or app that
+was already open does not have them yet. Reload the page (or close and reopen
+the Home Assistant app) and the dashboard loads normally.
 
 **The scan finds 0 of N paired devices.**
 The controller must be powered on, on the same network as Home Assistant,

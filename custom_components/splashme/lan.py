@@ -251,6 +251,10 @@ class SplashMeLanAux:
         )
 
 
+def _same_window(a: pv2.Schedule, b: pv2.Schedule) -> bool:
+    return (a.start_min, a.end_min, a.week_day) == (b.start_min, b.end_min, b.week_day)
+
+
 @dataclass(frozen=True, slots=True)
 class SplashMeLanData:
     """Coordinator data for one LAN device."""
@@ -382,7 +386,10 @@ class SplashMeLanData:
             (a.slot, a.type_code, a.name, self.light_type(a.slot) if a.is_light else None)
             for a in self.aux
         )
-        schedules = tuple((s.index, s.name) for s in self.schedules if s.defined)
+        # The window decides which records group with a pump schedule on the dashboard.
+        schedules = tuple(
+            (s.index, s.name, s.start_min, s.end_min, s.week_day) for s in self.schedules if s.defined
+        )
         return (pump, slots, schedules, self.has_spa)
 
     def schedule_by_index(self, index: int) -> pv2.Schedule | None:
@@ -390,6 +397,34 @@ class SplashMeLanData:
         for sched in self.schedules:
             if sched.index == index:
                 return sched
+        return None
+
+    def linked_schedules(self, index: int) -> tuple[pv2.Schedule, ...]:
+        """Return the pump-linked schedules that belong to a filter pump schedule.
+
+        The app's "Linked Devices" on a pump schedule become one record per
+        device (ozone, UV, ioniser, cleaner) with the same start, end and
+        days; the controller keeps no link between them.
+        """
+        head = self.schedule_by_index(index)
+        if head is None or head.aux_type != MAIN_PUMP_TYPE_CODE:
+            return ()
+        return tuple(
+            s
+            for s in self.schedules
+            if s.defined
+            and s.aux_type in PUMP_LINKED_TYPE_CODES
+            and _same_window(s, head)
+        )
+
+    def linked_to_schedule(self, index: int) -> pv2.Schedule | None:
+        """Return the filter pump schedule a pump-linked schedule belongs to."""
+        sched = self.schedule_by_index(index)
+        if sched is None or sched.aux_type not in PUMP_LINKED_TYPE_CODES:
+            return None
+        for head in self.schedules:
+            if head.defined and head.aux_type == MAIN_PUMP_TYPE_CODE and _same_window(sched, head):
+                return head
         return None
 
     def with_frame(self, frame: pv2.Frame) -> SplashMeLanData:

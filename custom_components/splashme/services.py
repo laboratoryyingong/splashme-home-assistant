@@ -58,10 +58,19 @@ def _find_coordinator(hass: HomeAssistant, device_id: str):
     raise HomeAssistantError(f"No SplashMe device {device_id} found")
 
 
-def _lan_schedule_fields(coordinator: SplashMeLanCoordinator, call: ServiceCall) -> pv2.ScheduleFields:
-    """Build the v2 schedule payload; defaults to the filter pump slot."""
+def _lan_schedule_fields(
+    coordinator: SplashMeLanCoordinator, call: ServiceCall, current: pv2.Schedule | None = None
+) -> pv2.ScheduleFields:
+    """Build the v2 schedule payload.
+
+    The device's UPDATE overwrites the whole record, so fields left out of an
+    update keep the existing record's values; a create defaults to the filter
+    pump slot.
+    """
     data = coordinator.data
     slot = call.data.get("aux_slot")
+    if slot is None and current is not None:
+        slot = current.aux_slot
     if slot is None:
         pump = data.main_pump
         if pump is None:
@@ -76,11 +85,11 @@ def _lan_schedule_fields(coordinator: SplashMeLanCoordinator, call: ServiceCall)
         slot=slot,
         aux_type=aux.type_code,
         turnover=0,
-        speed=call.data.get("pump_speed", 0),
+        speed=call.data.get("pump_speed", current.speed if current else 0),
         start_min=call.data["start_time"],
         end_min=call.data["end_time"],
         week_day=week_day,
-        name=call.data.get("schedule_name", ""),
+        name=call.data.get("schedule_name", current.name if current else ""),
     )
 
 
@@ -114,8 +123,12 @@ async def async_register_services(hass: HomeAssistant) -> None:
     async def _update(call: ServiceCall) -> None:
         coordinator = _find_coordinator(hass, call.data[ATTR_DEVICE_ID])
         if isinstance(coordinator, SplashMeLanCoordinator):
+            num = call.data[ATTR_SCHEDULE_NUM]
+            current = coordinator.data.schedule_by_index(num)
+            if current is None or not current.defined:
+                raise HomeAssistantError(f"No schedule {num} on this device")
             await coordinator.async_update_schedule(
-                call.data[ATTR_SCHEDULE_NUM], _lan_schedule_fields(coordinator, call)
+                num, _lan_schedule_fields(coordinator, call, current)
             )
             return
         body = _schedule_body(call)

@@ -709,9 +709,15 @@ class SplashMeLanScheduleSwitch(SplashMeLanEntity, SwitchEntity):
 
     @property
     def name(self) -> str:
-        """Follow the schedule's current name (slots get reused)."""
+        """Follow the schedule's current name (slots get reused).
+
+        A record saved without a name is labelled after the slot it controls.
+        """
         sched = self._schedule()
         name = sched.name if sched else ""
+        if sched and not name:
+            aux = self.coordinator.data.aux_by_slot(sched.aux_slot)
+            name = aux.display_name if aux else ""
         return f"Schedule {self._index + 1}" + (f" {name}" if name else "")
 
     @property
@@ -735,8 +741,9 @@ class SplashMeLanScheduleSwitch(SplashMeLanEntity, SwitchEntity):
         sched = self._schedule()
         if sched is None:
             return {}
-        aux = self.coordinator.data.aux_by_slot(sched.aux_slot)
-        return {
+        data = self.coordinator.data
+        aux = data.aux_by_slot(sched.aux_slot)
+        attrs = {
             "schedule_num": sched.index,
             "aux_slot": sched.aux_slot,
             "aux_name": aux.display_name if aux else None,
@@ -746,18 +753,34 @@ class SplashMeLanScheduleSwitch(SplashMeLanEntity, SwitchEntity):
             "days": [
                 label for i, label in enumerate(_WEEKDAY_LABELS) if sched.week_day & (1 << i)
             ],
-            "pump_speed": sched.speed,
         }
+        # The app shows a pump schedule and its linked devices as one card.
+        linked = data.linked_schedules(self._index)
+        if linked:
+            attrs["linked_devices"] = [
+                (a.display_name if (a := data.aux_by_slot(s.aux_slot)) else f"Aux {s.aux_slot}")
+                for s in linked
+            ]
+        head = data.linked_to_schedule(self._index)
+        if head is not None:
+            attrs["linked_to_schedule_num"] = head.index
+        return attrs
+
+    async def _async_set_enabled(self, enabled: bool) -> None:
+        """Enable/disable the schedule and, for a pump schedule, its linked records."""
+        await self.coordinator.async_set_schedule_enabled(self._index, enabled)
+        for linked in self.coordinator.data.linked_schedules(self._index):
+            await self.coordinator.async_set_schedule_enabled(linked.index, enabled)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable the schedule."""
         del kwargs
-        await self.coordinator.async_set_schedule_enabled(self._index, True)
+        await self._async_set_enabled(True)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Disable the schedule."""
         del kwargs
-        await self.coordinator.async_set_schedule_enabled(self._index, False)
+        await self._async_set_enabled(False)
 
 
 def _minutes_to_hhmm(value) -> str | None:

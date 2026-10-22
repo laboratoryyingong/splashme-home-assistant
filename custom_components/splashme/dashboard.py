@@ -451,8 +451,11 @@ def build_dashboard_config(
         )
         if targets:
             water += [_heading("Targets", "mdi:target"), *targets]
+    # Linked-device records are folded into their pump schedule, as in the app.
     schedules = [
-        ent[key] for key in sorted(ent, key=_schedule_sort) if key.startswith("schedule_")
+        ent[key]
+        for key in sorted(ent, key=_schedule_sort)
+        if key.startswith("schedule_") and data.linked_to_schedule(int(key.removeprefix("schedule_"))) is None
     ]
     if schedules:
         water += [

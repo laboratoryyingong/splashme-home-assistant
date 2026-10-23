@@ -707,18 +707,27 @@ class SplashMeLanScheduleSwitch(SplashMeLanEntity, SwitchEntity):
     def _schedule(self):
         return self.coordinator.data.schedule_by_index(self._index)
 
+    def _linked_names(self) -> list[str]:
+        """Names of the linked devices of a pump schedule (the app's "Linked Devices")."""
+        data = self.coordinator.data
+        return [
+            (a.display_name if (a := data.aux_by_slot(s.aux_slot)) else f"Aux {s.aux_slot}")
+            for s in data.linked_schedules(self._index)
+        ]
+
     @property
     def name(self) -> str:
         """Follow the schedule's current name (slots get reused).
 
-        A record saved without a name is labelled after the slot it controls.
+        A record saved without a name is labelled after the slot it controls;
+        a pump schedule lists its linked devices ("Schedule 2 Main Pump + Ozone").
         """
         sched = self._schedule()
         name = sched.name if sched else ""
         if sched and not name:
             aux = self.coordinator.data.aux_by_slot(sched.aux_slot)
             name = aux.display_name if aux else ""
-        return f"Schedule {self._index + 1}" + (f" {name}" if name else "")
+        return " + ".join([f"Schedule {self._index + 1}" + (f" {name}" if name else ""), *self._linked_names()])
 
     @property
     def available(self) -> bool:
@@ -755,12 +764,8 @@ class SplashMeLanScheduleSwitch(SplashMeLanEntity, SwitchEntity):
             ],
         }
         # The app shows a pump schedule and its linked devices as one card.
-        linked = data.linked_schedules(self._index)
-        if linked:
-            attrs["linked_devices"] = [
-                (a.display_name if (a := data.aux_by_slot(s.aux_slot)) else f"Aux {s.aux_slot}")
-                for s in linked
-            ]
+        if linked := self._linked_names():
+            attrs["linked_devices"] = linked
         head = data.linked_to_schedule(self._index)
         if head is not None:
             attrs["linked_to_schedule_num"] = head.index

@@ -52,9 +52,9 @@ home.
   `splashme.create_schedule`, `splashme.update_schedule` and
   `splashme.delete_schedule` services. A pump schedule with *Linked Devices*
   in the app (ozone, UV, ioniser, cleaner) is stored as one record per device
-  with the same times; the pump schedule's switch lists them as
-  `linked_devices`, toggles them with it, and the dashboard shows only the
-  pump schedule, as the app does.
+  with the same times; the pump schedule's switch names them (*Schedule 2
+  Main Pump + Ozone*), lists them in `linked_devices`, toggles them with it,
+  and the dashboard shows only the pump schedule, as the app does.
 - **SplashMe dashboard**: a ready-made sidebar panel with tank, heater and
   chemistry cards, generated for each controller from the equipment it has,
   and a Trends tab with the history graphs.

@@ -499,13 +499,21 @@ class SplashmeFiltrationCard extends SplashmeCardBase {
 
     const linked = root.querySelector(".linked");
     linked.hidden = !cfg.linked.length;
-    root.querySelector(".chips").innerHTML = cfg.linked
-      .map((d) => {
+    // Entity IDs and names come from the card config; build nodes instead of
+    // HTML so a name containing markup can't run in the dashboard.
+    root.querySelector(".chips").replaceChildren(
+      ...cfg.linked.map((d) => {
         const st = this._state(d.entity);
-        const cls = st ? (st.state === "on" ? "on" : "") : "unavailable";
-        return `<span class="chip ${cls}" data-entity="${d.entity}"><span class="dot ${st && st.state === "on" ? "on" : ""}"></span>${d.name}</span>`;
+        const on = !!st && st.state === "on";
+        const chip = document.createElement("span");
+        chip.className = `chip ${st ? (on ? "on" : "") : "unavailable"}`;
+        chip.dataset.entity = d.entity;
+        const dot = document.createElement("span");
+        dot.className = `dot ${on ? "on" : ""}`;
+        chip.append(dot, String(d.name || d.entity || ""));
+        return chip;
       })
-      .join("");
+    );
   }
 }
 

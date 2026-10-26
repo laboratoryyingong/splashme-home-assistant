@@ -129,7 +129,7 @@ def _sync_registered_devices(
     active_identifiers = {(DOMAIN, device.device_id) for device in devices}
 
     for device in devices:
-        device_entry = device_registry.async_get_or_create(
+        device_registry.async_get_or_create(
             config_entry_id=entry.entry_id,
             identifiers={(DOMAIN, device.device_id)},
             manufacturer=MANUFACTURER,
@@ -137,7 +137,6 @@ def _sync_registered_devices(
             model=_device_model(device),
             serial_number=device.device_id,
         )
-        device_registry.async_update_device(device_entry.id, area_id=None)
 
     for existing_device in dr.async_entries_for_config_entry(device_registry, entry.entry_id):
         splashme_identifiers = {

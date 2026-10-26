@@ -267,7 +267,9 @@ class OAuth2FlowHandler(
         await self.async_set_unique_id(user_info.sub)
         if self.source == SOURCE_REAUTH:
             self._abort_if_unique_id_mismatch(reason="wrong_account")
-            return self.async_update_reload_and_abort(self._get_reauth_entry(), data=data)
+            # Merge into the existing data so connection: account (and anything
+            # else the entry carries) survives the re-authentication.
+            return self.async_update_reload_and_abort(self._get_reauth_entry(), data_updates=data)
 
         self._abort_if_unique_id_configured()
         # Scan the local network before creating the entry, so the user sees

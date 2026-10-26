@@ -31,7 +31,9 @@ class SplashmeTankCard extends HTMLElement {
   }
 
   _build() {
-    const color = this._config.color || "#29b6f6";
+    // The colour comes from the card config, so hand it to the stylesheet as a
+    // custom property instead of interpolating it into the <style> text.
+    this.style.setProperty("--splashme-tank-color", String(this._config.color || "#29b6f6"));
     this.attachShadow({ mode: "open" });
     this.shadowRoot.innerHTML = `
       <style>
@@ -50,14 +52,14 @@ class SplashmeTankCard extends HTMLElement {
         .water {
           position: absolute; left: 0; right: 0; bottom: 0;
           height: 0%;
-          background: ${color};
+          background: var(--splashme-tank-color);
           opacity: 0.85;
           transition: height 1.2s ease;
         }
         .wave {
           position: absolute; left: -50%; top: -14px;
           width: 200%; height: 16px;
-          fill: ${color};
+          fill: var(--splashme-tank-color);
           animation: drift 4s linear infinite;
         }
         .wave.back {

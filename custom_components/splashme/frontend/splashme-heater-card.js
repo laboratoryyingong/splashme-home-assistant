@@ -190,9 +190,17 @@ class SplashmeHeaterCard extends HTMLElement {
 
     const tabs = root.querySelector(".tabs");
     tabs.className = `tabs ${cfg.tabs.length === 1 ? "single" : ""}`;
-    tabs.innerHTML = cfg.tabs
-      .map((t, i) => `<button data-index="${i}" class="${i === this._tab ? "active" : ""}">${t.title || `Tab ${i + 1}`}</button>`)
-      .join("");
+    // Titles, names and entity IDs come from the card config; build nodes
+    // instead of HTML so a value containing markup can't run in the dashboard.
+    tabs.replaceChildren(
+      ...cfg.tabs.map((t, i) => {
+        const button = document.createElement("button");
+        button.dataset.index = String(i);
+        button.className = i === this._tab ? "active" : "";
+        button.textContent = t.title || `Tab ${i + 1}`;
+        return button;
+      })
+    );
 
     // HA converts temperature entities to the instance's unit system, so show the
     // unit the state actually carries instead of assuming °C.
@@ -205,17 +213,27 @@ class SplashmeHeaterCard extends HTMLElement {
     root.querySelector(".ambient b").textContent = fmt(tab.ambient_entity || cfg.ambient_entity);
     root.querySelector(".water b").textContent = fmt(tab.water_entity || cfg.water_entity);
 
-    root.querySelector(".heaters").innerHTML = tab.heaters
-      .map((h) => {
+    root.querySelector(".heaters").replaceChildren(
+      ...tab.heaters.map((h) => {
         const enable = this._state(h.enable_entity);
         const running = this._state(h.state_entity);
-        return `<div class="heater ${enable ? "" : "unavailable"}" data-entity="${h.enable_entity}">
-            <span class="dot ${running && running.state === "on" ? "on" : ""}"></span>
-            <span class="name">${h.name || h.enable_entity}</span>
-            <span class="check ${enable && enable.state === "on" ? "on" : ""}"><ha-icon icon="mdi:check"></ha-icon></span>
-          </div>`;
+        const row = document.createElement("div");
+        row.className = `heater ${enable ? "" : "unavailable"}`;
+        row.dataset.entity = h.enable_entity;
+        const dot = document.createElement("span");
+        dot.className = `dot ${running && running.state === "on" ? "on" : ""}`;
+        const name = document.createElement("span");
+        name.className = "name";
+        name.textContent = h.name || h.enable_entity;
+        const check = document.createElement("span");
+        check.className = `check ${enable && enable.state === "on" ? "on" : ""}`;
+        const icon = document.createElement("ha-icon");
+        icon.setAttribute("icon", "mdi:check");
+        check.append(icon);
+        row.append(dot, name, check);
+        return row;
       })
-      .join("");
+    );
 
     const target = this._target();
     const { min, max } = this._range();

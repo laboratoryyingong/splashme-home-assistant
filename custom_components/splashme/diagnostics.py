@@ -118,4 +118,6 @@ def _lan_diagnostics(entry: SplashMeConfigEntry) -> dict[str, Any]:
         "aux": [asdict(aux) for aux in data.aux],
         "pump": None if data.pump is None else asdict(data.pump),
         "schedules": [asdict(s) for s in data.schedules],
+        "ph_settings": data.ph_settings,
+        "chlorine_settings": data.chlorine_settings,
     }

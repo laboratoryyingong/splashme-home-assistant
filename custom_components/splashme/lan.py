@@ -696,28 +696,36 @@ class SplashMeLanCoordinator(DataUpdateCoordinator[SplashMeLanData]):
         self.hass.async_create_task(_settle())
 
     async def _async_write_settings(
-        self, command: str, current: dict[str, Any] | None, changes: dict[str, Any]
+        self, command: str, changes: dict[str, Any]
     ) -> dict[str, Any]:
-        """Write a full settings object (the firmware zeroes missing fields)."""
-        if not current:
-            raise LanError("Settings are not available yet; wait for the next poll")
-        body = json.dumps({**current, **changes}).encode()
-        await self._async_action("cmd", pv2.encode_cmd(command, body))
-        return await self.client.async_query_json(f"get_{command.removeprefix('set_')}")
+        """Write a full settings object (the firmware zeroes missing fields).
+
+        The object is read from the device right before the write: the polled
+        copy can be a minute old, and writing its remaining volume back would
+        undo a dose the controller counted in the meantime.
+        """
+        query = f"get_{command.removeprefix('set_')}"
+        try:
+            current = await self.client.async_query_json(query)
+            if not current:
+                raise LanError(f"Device returned no settings for {query}")
+            body = json.dumps({**current, **changes}).encode()
+            await self._async_action("cmd", pv2.encode_cmd(command, body))
+            return await self.client.async_query_json(query)
+        except (ClientError, TimeoutError) as err:
+            raise LanError(f"Device unreachable for {command}: {err}") from err
 
     async def async_update_ph_settings(self, changes: dict[str, Any]) -> None:
         """Apply changes on top of the current pH settings and write them back."""
-        current = self.data.ph_settings if self.data else None
         settings = await self._async_write_settings(
-            "set_ph_settings", current, {"reset_acid_volume": False, **changes}
+            "set_ph_settings", {"reset_acid_volume": False, **changes}
         )
         self.async_set_updated_data(replace(self.data, ph_settings=settings))
 
     async def async_update_chlorine_settings(self, changes: dict[str, Any]) -> None:
         """Apply changes on top of the current chlorine settings and write them back."""
-        current = self.data.chlorine_settings if self.data else None
         settings = await self._async_write_settings(
-            "set_chlorine_settings", current, {"reset_chlorine_volume": False, **changes}
+            "set_chlorine_settings", {"reset_chlorine_volume": False, **changes}
         )
         self.async_set_updated_data(replace(self.data, chlorine_settings=settings))
 

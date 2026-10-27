@@ -134,7 +134,7 @@ class SplashMeLanClient:
         if payload is not None:
             # Never sign ahead of wall-clock: the app and cloud sign with the
             # current second and the device would drop their next command.
-            if (delay := self._counter.wait_time()) > 0:
+            while (delay := self._counter.wait_time()) > 0:
                 await asyncio.sleep(delay)
             body["env"] = pv2.wrap(self._require_key(), self._counter.next(), payload).hex()
         data = await self._async_post("pv2", body)

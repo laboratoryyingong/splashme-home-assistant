@@ -61,6 +61,7 @@ from .lan import (
     SplashMeLanAux,
     SplashMeLanCoordinator,
     SplashMeLanData,
+    is_read_only,
     lan_device_identifier,
     unfitted_keys,
 )
@@ -71,6 +72,9 @@ OPT_DASHBOARD_HASH = "dashboard_generated_hash"
 DASHBOARD_ICON = "mdi:pool"
 # Renaming the device renames all its entity IDs in a burst: rebuild once after it.
 RENAME_REBUILD_DELAY = 2  # seconds
+
+
+READ_ONLY_DOMAINS = frozenset({"binary_sensor", "sensor"})
 
 
 def _short_id(entry: ConfigEntry) -> str:
@@ -316,6 +320,9 @@ def build_dashboard_config(
     # Only a variable speed pump gets the speed slider. A single speed pump only
     # reads 0 or 100 %: show it on or off instead of a speed.
     variable_speed = "pump_speed_setpoint" in ent
+    if is_read_only(entry):
+        # The write entities stay registered (unavailable): leave their cards out.
+        ent = {key: entity_id for key, entity_id in ent.items() if entity_id.split(".")[0] in READ_ONLY_DOMAINS}
     aux = list(data.aux) if data is not None else []
     pump = next((a for a in aux if a.type_code == MAIN_PUMP_TYPE_CODE), None)
     # A heater on a general output gets no target temperature (the controller only

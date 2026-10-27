@@ -12,7 +12,7 @@ from homeassistant.helpers import config_validation as cv
 
 from . import pv2
 from .const import CONF_DEVICE_ID, DOMAIN
-from .lan import SplashMeLanCoordinator
+from .lan import SplashMeLanCoordinator, is_read_only
 
 ATTR_DEVICE_ID = "device_id"
 ATTR_SCHEDULE_NUM = "schedule_num"
@@ -51,6 +51,8 @@ def _find_coordinator(hass: HomeAssistant, device_id: str):
             continue
         if isinstance(coordinator, SplashMeLanCoordinator):
             if entry.data.get(CONF_DEVICE_ID) == device_id:
+                if is_read_only(entry):
+                    raise HomeAssistantError(f"SplashMe device {device_id} is set to read-only")
                 return coordinator
             continue
         if any(d.device_id == device_id for d in coordinator.data.devices):

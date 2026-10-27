@@ -47,7 +47,14 @@ home.
   doses today, drum volumes and chemical remaining, desired pH / ORP setpoints.
 - **Pump**: on/off, speed, mode, start-up status (starting, priming with a
   countdown), flow rate, brand.
-- **Heater** and **auxiliary outputs** (lights and other relays).
+- **Heating**: a thermostat for the pool and one for the spa (**Pool
+  Heating**, **Spa Heating**) when something can heat them. Heat / off picks
+  whether that heater (or solar, when that is all it has) may be used, and a
+  heater shared by the pool and spa is switched by both thermostats together.
+  The controller heats only while the filter pump runs and the water is below
+  the target. The controller has one water probe, so each thermostat shows the
+  last reading taken while its own water was circulating.
+- **Auxiliary outputs** (lights and other relays).
 - **Schedules**: one switch per schedule on the controller, plus
   `splashme.create_schedule`, `splashme.update_schedule` and
   `splashme.delete_schedule` services. A pump schedule with *Linked Devices*
@@ -118,6 +125,13 @@ A dashboard only hides controls. Home Assistant has no per-user permissions
 on entities, so any signed-in user can still use them from scripts,
 automations or the developer tools.
 
+If the SplashMe app stays the way you control the pool, turn on
+**Read-only (observe only)** under **Configure**. Home Assistant then only
+reads the controller: there are no switches, settings, lights, thermostats or
+schedule services for it, and nothing is ever written to it. The entities that
+control the controller stay listed as unavailable while it is on, so their
+names and areas come back when you turn it off.
+
 ## Apple Home and Google Home
 
 The integration does not talk to Apple Home or Google Home itself; use Home
@@ -127,7 +141,8 @@ the SplashMe entities to expose. A small set works best for a household:
 | Include | Shows up as |
 |---|---|
 | The pump's switch (**Filter Pump**, or the name you gave that output) | Switch |
-| The heating switches (**Pool Heater**, **Spa Heater**, **Solar Heater**) | Switch |
+| **Pool Heating**, **Spa Heating** | Thermostat: heat / off, target, water temperature |
+| **Solar Heater**, when the pool also has a heater | Switch |
 | `light.*` entities | Light |
 | Switches of outputs you use by hand: jets, blower, waterfall, ... | Switch |
 | **Water Temperature** | Temperature sensor |

@@ -52,6 +52,7 @@ from .const import (
     LAN_SCAN_INTERVAL_SECONDS,
     LAN_TIMEOUT_SECONDS,
     MANUFACTURER,
+    OPT_READ_ONLY,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -78,6 +79,8 @@ LIQUID_CHLORINE_TYPE_CODES = frozenset({8})
 # hand: the user picks which sources may heat and the target temperatures.
 POOL_HEATER_TYPE_CODES = frozenset({2, 32})  # pool heater, spa & pool heater
 SPA_HEATER_TYPE_CODES = frozenset({19, 32})  # spa heater, spa & pool heater
+# One heater for both: the firmware runs it if either body has it selected.
+SHARED_HEATER_TYPE_CODES = frozenset({32})
 SOLAR_TYPE_CODES = frozenset({17, 18})  # solar dedicated, solar filter pump
 HEATING_TYPE_CODES = POOL_HEATER_TYPE_CODES | SPA_HEATER_TYPE_CODES | SOLAR_TYPE_CODES
 # Return, suction, extra 1, extra 2: the firmware interlocks them, so any one
@@ -101,15 +104,25 @@ class SplashMeLanClient:
     """
 
     def __init__(
-        self, session: ClientSession, host: str, key: bytes | None = None, port: int = LAN_PORT
+        self,
+        session: ClientSession,
+        host: str,
+        key: bytes | None = None,
+        port: int = LAN_PORT,
+        counter: pv2.Counter | None = None,
     ) -> None:
-        """Initialize the client."""
+        """Initialize the client.
+
+        Pass the device's long-lived `counter` when one exists: a fresh one
+        starts at the current second, which the previous client of a reloaded
+        entry may already have signed with, and the device refuses a repeat.
+        """
         self._session = session
         self.host = host
         self._port = port
         self._key = key
         self._lock = asyncio.Lock()
-        self._counter = pv2.Counter()
+        self._counter = counter or pv2.Counter()
 
     async def _async_post(self, command: str, body: dict[str, Any]) -> dict[str, Any]:
         """POST one command and return the raw JSON response."""
@@ -596,6 +609,9 @@ class SplashMeLanCoordinator(DataUpdateCoordinator[SplashMeLanData]):
         self._schedule_confirm_refresh()
 
     async def _async_action(self, name: str, payload: bytes) -> None:
+        # Every write goes through here: a read-only entry never sends op=a.
+        if is_read_only(self.entry):
+            raise LanError("This SplashMe entry is read-only")
         try:
             self._apply_frame(await self.client.async_action(name, payload))
         except (ClientError, TimeoutError) as err:
@@ -728,6 +744,11 @@ class SplashMeLanCoordinator(DataUpdateCoordinator[SplashMeLanData]):
             "set_chlorine_settings", {"reset_chlorine_volume": False, **changes}
         )
         self.async_set_updated_data(replace(self.data, chlorine_settings=settings))
+
+
+def is_read_only(entry: ConfigEntry) -> bool:
+    """Return whether the LAN entry only observes the controller (#15)."""
+    return entry.options.get(OPT_READ_ONLY) is True
 
 
 def lan_hostname(mac: str) -> str:

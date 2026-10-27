@@ -60,11 +60,13 @@
         "title": "SplashMe options",
         "data": {
           "create_dashboard": "Create the Pool dashboard",
-          "dashboard_mode": "Pool dashboard"
+          "dashboard_mode": "Pool dashboard",
+          "read_only": "Read-only (observe only)"
         },
         "data_description": {
           "create_dashboard": "A ready-made dashboard for this controller in the sidebar. Turn off to remove it; your own dashboards are not affected.",
-          "dashboard_mode": "Full shows everything the controller has: dosing, chemistry, schedules and trends. Basic only has the pump, heating, lights, other outputs and the water temperature. \"Basic for users, full for administrators\" adds a Pool Admin dashboard that only administrators see. A dashboard hides controls; it does not stop a signed-in user from using the entities elsewhere."
+          "dashboard_mode": "Full shows everything the controller has: dosing, chemistry, schedules and trends. Basic only has the pump, heating, lights, other outputs and the water temperature. \"Basic for users, full for administrators\" adds a Pool Admin dashboard that only administrators see. A dashboard hides controls; it does not stop a signed-in user from using the entities elsewhere.",
+          "read_only": "Home Assistant only reads this controller: no switches, settings, lights or schedule services, and nothing is ever written to it. Use this when the SplashMe app stays the way you control the pool. Entities that control the controller stay listed as unavailable while this is on."
         }
       }
     },

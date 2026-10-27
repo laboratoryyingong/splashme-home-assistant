@@ -54,6 +54,7 @@ from .const import (
     OPT_CREATE_DASHBOARD,
     OPT_DASHBOARD_ADMIN_ONLY,
     OPT_DASHBOARD_MODE,
+    OPT_READ_ONLY,
 )
 from .dashboard import dashboard_mode
 from .lan import LanError, SplashMeLanClient
@@ -354,7 +355,7 @@ class OAuth2FlowHandler(
 
 
 class SplashMeOptionsFlow(OptionsFlow):
-    """Per-device options: whether the Pool dashboard is created, its layout and who sees it."""
+    """Per-device options: the Pool dashboard (created, layout, who sees it) and read-only."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -382,6 +383,7 @@ class SplashMeOptionsFlow(OptionsFlow):
                             mode=SelectSelectorMode.DROPDOWN,
                         )
                     ),
+                    vol.Optional(OPT_READ_ONLY, default=options.get(OPT_READ_ONLY, False)): bool,
                 }
             ),
         )

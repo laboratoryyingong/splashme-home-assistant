@@ -9,7 +9,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import SplashMeConfigEntry, is_lan_entry
-from .const import OPT_LAN_PUMP_SPEED_SETPOINT
+from .const import HEATING_TARGET_MAX, HEATING_TARGET_MIN, OPT_LAN_PUMP_SPEED_SETPOINT
 from .entity import SplashMeDeviceEntity
 from .lan import DEFAULT_PUMP_SPEED, SplashMeLanCoordinator, SplashMeLanEntity
 from .slots import SplashMeLanSlotEntities
@@ -262,8 +262,8 @@ class SplashMeLanSettingsNumber(SplashMeLanEntity, NumberEntity):
 class SplashMeLanTargetTempNumber(SplashMeLanEntity, NumberEntity):
     """Pool or spa target temperature; the firmware heats towards it."""
 
-    _attr_native_min_value = 0
-    _attr_native_max_value = 40
+    _attr_native_min_value = HEATING_TARGET_MIN
+    _attr_native_max_value = HEATING_TARGET_MAX
     _attr_native_step = 1
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
     _attr_device_class = NumberDeviceClass.TEMPERATURE

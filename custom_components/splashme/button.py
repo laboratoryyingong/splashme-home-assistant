@@ -9,7 +9,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from . import SplashMeConfigEntry, is_lan_entry
 from .dashboard import async_register_dashboard
 from .entity import SplashMeDeviceEntity
-from .lan import SplashMeLanEntity
+from .lan import SplashMeLanEntity, is_read_only
 from .lights import LIGHT_ACTIONS, LightAction
 from .slots import SplashMeLanSlotEntities
 
@@ -22,6 +22,12 @@ async def async_setup_entry(
     """Set up SplashMe buttons."""
     coordinator = entry.runtime_data.coordinator
     if is_lan_entry(entry):
+        if is_read_only(entry):
+            # Neither reaches the controller: one polls, the other rebuilds the dashboard.
+            async_add_entities(
+                [SplashMeLanRefreshButton(coordinator, entry), SplashMeLanResetDashboardButton(coordinator, entry)]
+            )
+            return
         async_add_entities(
             [
                 SplashMeLanRefreshButton(coordinator, entry),

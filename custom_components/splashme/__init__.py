@@ -23,6 +23,7 @@ from homeassistant.helpers.config_entry_oauth2_flow import (
     async_get_config_entry_implementation,
 )
 
+from . import pv2
 from .account import (
     SplashMeAccountRuntimeData,
     async_register_builtin_oauth,
@@ -43,11 +44,12 @@ from .const import (
     MANUFACTURER,
     PLATFORMS,
     PLATFORMS_LAN,
+    PLATFORMS_LAN_READ_ONLY,
     OPT_CREATE_DASHBOARD,
 )
 from .dashboard import async_register_dashboard, async_remove_dashboard, async_track_renames, dashboard_mode
 from .coordinator import SplashMeDataCoordinator, SplashMeDevice
-from .lan import SplashMeLanClient, SplashMeLanCoordinator
+from .lan import SplashMeLanClient, SplashMeLanCoordinator, is_read_only
 from .slots import SplashMeLanSlotEntities, async_track_equipment
 
 
@@ -69,6 +71,7 @@ class SplashMeLanRuntimeData:
     coordinator: SplashMeLanCoordinator
     slot_entities: list[SplashMeLanSlotEntities] = field(default_factory=list)
     dashboard_options: tuple[bool, str] | None = None  # (create, mode)
+    read_only: bool = False  # as set up; changing it reloads the entry
 
 
 SplashMeConfigEntry = ConfigEntry[
@@ -83,6 +86,8 @@ def is_lan_entry(entry: SplashMeConfigEntry) -> bool:
 
 FRONTEND_URL_BASE = "/splashme-frontend"
 _FRONTEND_FLAG = f"{DOMAIN}_frontend_registered"
+# Signing counter per LAN entry, kept across its reloads (see SplashMeLanClient).
+_LAN_COUNTERS = f"{DOMAIN}_lan_counters"
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -161,18 +166,27 @@ async def _async_setup_lan_entry(
         aiohttp_client.async_get_clientsession(hass),
         entry.data[CONF_HOST],
         key=bytes.fromhex(key_hex) if key_hex else None,
+        counter=hass.data.setdefault(_LAN_COUNTERS, {}).setdefault(entry.entry_id, pv2.Counter()),
     )
     coordinator = SplashMeLanCoordinator(hass, client, entry)
     await coordinator.async_config_entry_first_refresh()
 
-    entry.runtime_data = SplashMeLanRuntimeData(client=client, coordinator=coordinator)
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS_LAN)
+    entry.runtime_data = SplashMeLanRuntimeData(
+        client=client, coordinator=coordinator, read_only=is_read_only(entry)
+    )
+    await hass.config_entries.async_forward_entry_setups(
+        entry, _lan_platforms(entry.runtime_data.read_only)
+    )
     entry.runtime_data.dashboard_options = _dashboard_options(entry)
     await async_register_dashboard(hass, entry, coordinator)
     async_track_renames(hass, entry, coordinator)
     async_track_equipment(hass, entry, coordinator)
     entry.async_on_unload(entry.add_update_listener(_async_lan_entry_updated))
     return True
+
+
+def _lan_platforms(read_only: bool) -> list:
+    return PLATFORMS_LAN_READ_ONLY if read_only else PLATFORMS_LAN
 
 
 def _dashboard_options(entry: ConfigEntry) -> tuple[bool, str]:
@@ -187,6 +201,11 @@ async def _async_lan_entry_updated(hass: HomeAssistant, entry: SplashMeConfigEnt
     settings actually changed.
     """
     runtime = entry.runtime_data
+    if is_read_only(entry) != runtime.read_only:
+        # Different platforms: reload. Entities of the platforms a read-only entry
+        # leaves out stay registered and show as unavailable until it is turned off.
+        hass.config_entries.async_schedule_reload(entry.entry_id)
+        return
     wanted = _dashboard_options(entry)
     if wanted == runtime.dashboard_options:
         return
@@ -277,7 +296,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: SplashMeConfigEntry) ->
     """Unload a config entry."""
     if is_account_entry(entry):
         return True
-    platforms = PLATFORMS_LAN if is_lan_entry(entry) else PLATFORMS
+    # The platforms that were set up: the read-only option may already have changed.
+    platforms = _lan_platforms(entry.runtime_data.read_only) if is_lan_entry(entry) else PLATFORMS
     if not platforms:
         return True
     return await hass.config_entries.async_unload_platforms(entry, platforms)

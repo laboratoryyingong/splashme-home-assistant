@@ -52,6 +52,11 @@ OPT_LAN_PUMP_SPEED_SETPOINT = "pump_speed_setpoint"
 OPT_CREATE_DASHBOARD = "create_dashboard"
 OPT_DASHBOARD_ADMIN_ONLY = "dashboard_admin_only"  # v0.1.11, replaced by OPT_DASHBOARD_MODE
 OPT_DASHBOARD_MODE = "dashboard_mode"
+# Observe only: no entity, service or action that writes to the controller (#15).
+OPT_READ_ONLY = "read_only"
+# Pool / spa target temperature range in whole °C: the SplashMe app's dial.
+HEATING_TARGET_MIN = 0
+HEATING_TARGET_MAX = 50
 DASHBOARD_FULL = "full"
 DASHBOARD_BASIC = "basic"
 DASHBOARD_BASIC_USERS_FULL_ADMINS = "basic_users_full_admins"
@@ -76,8 +81,17 @@ PLATFORMS: list[Platform] = [
 PLATFORMS_LAN: list[Platform] = [
     Platform.BINARY_SENSOR,
     Platform.BUTTON,
+    Platform.CLIMATE,
     Platform.LIGHT,
     Platform.NUMBER,
     Platform.SENSOR,
     Platform.SWITCH,
+]
+
+# A read-only LAN entry: readings, plus the Refresh and Reset Pool Dashboard
+# buttons, which never reach the controller.
+PLATFORMS_LAN_READ_ONLY: list[Platform] = [
+    Platform.BINARY_SENSOR,
+    Platform.BUTTON,
+    Platform.SENSOR,
 ]

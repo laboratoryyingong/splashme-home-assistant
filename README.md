@@ -71,7 +71,7 @@ home.
 
 - Home Assistant 2025.2 or newer.
 - A SplashMe account with at least one paired controller.
-- Controller firmware **2.5.45 or newer** (see the early access note above).
+- Controller firmware **2.5.46 or newer** (see the early access note above).
 - The controller and Home Assistant on the same local network. The controller
   announces itself with mDNS; it must be reachable on TCP port 8080.
 
@@ -187,7 +187,7 @@ the Home Assistant app) and the dashboard loads normally.
 
 **The scan finds 0 of N paired devices.**
 The controller must be powered on, on the same network as Home Assistant,
-and running firmware 2.5.45 or newer. Multicast DNS must be able to cross
+and running firmware 2.5.46 or newer. Multicast DNS must be able to cross
 between Home Assistant and the controller, so a Wi-Fi guest network or VLAN
 in between will block discovery. Choose **Scan again** once fixed, or finish:
 the controller is added automatically the next time it is seen.

@@ -1,6 +1,6 @@
 """Local LAN client, coordinator, and entity base for SplashMe devices.
 
-Devices with firmware >= 2.5.41 run an HTTP server on port 8080 and announce
+Devices with firmware >= 2.5.46 run an HTTP server on port 8080 and announce
 themselves via mDNS (_splashme._tcp). All communication is plain HTTP on the
 local network; the cloud is only contacted once, during setup, to fetch the
 device's protocol v2 envelope key.

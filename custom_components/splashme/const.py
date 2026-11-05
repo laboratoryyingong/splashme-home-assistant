@@ -35,7 +35,7 @@ OPT_SELECTED_DEVICE_ID = "selected_device_id"
 # changing the slider while the pump is stopped only updates this value.
 OPT_PUMP_SPEED_SETPOINTS = "pump_speed_setpoints"
 
-# LAN (local) connection: devices with firmware >= 2.5.41 serve HTTP on :8080
+# LAN (local) connection: devices with firmware >= 2.5.46 serve HTTP on :8080
 # and announce via mDNS (_splashme._tcp). Writes are signed with the device's
 # protocol v2 envelope key, fetched once from the cloud during setup.
 CONF_CONNECTION = "connection"

@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/laboratoryyingong/splashme-home-assistant/releases"><img src="https://img.shields.io/github/v/release/laboratoryyingong/splashme-home-assistant?include_prereleases&label=release" alt="Latest release"></a>
-  <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-custom%20repository-41BDF5" alt="HACS custom repository"></a>
+  <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-default-41BDF5" alt="HACS default repository"></a>
   <a href="https://www.splashmepool.com.au/"><img src="https://img.shields.io/badge/splashmepool.com.au-002b66" alt="SplashMe website"></a>
 </p>
 
@@ -69,7 +69,7 @@ home.
 
 ## Requirements
 
-- Home Assistant 2025.1 or newer.
+- Home Assistant 2025.2 or newer.
 - A SplashMe account with at least one paired controller.
 - Controller firmware **2.5.45 or newer** (see the early access note above).
 - The controller and Home Assistant on the same local network. The controller
@@ -79,11 +79,10 @@ home.
 
 ### HACS (recommended)
 
-1. In HACS open **Integrations**, then the three-dot menu, then
-   **Custom repositories**.
-2. Add `https://github.com/laboratoryyingong/splashme-home-assistant` with
-   category **Integration**.
-3. Search for **SplashMe** in HACS, install it, and restart Home Assistant.
+SplashMe is in the HACS default store, so no custom repository is needed.
+
+1. In HACS search for **SplashMe** and install it.
+2. Restart Home Assistant.
 
 Updates arrive through HACS like any other integration. When we publish a new
 release, HACS shows an update; install it and restart Home Assistant.
@@ -151,6 +150,21 @@ Leave out the dosing switches, schedule switches, the settings numbers and
 the buttons: they are maintenance settings or one-shot commands, not
 accessories. The dashboard options above do not affect what the bridge sees;
 it has its own include list.
+
+## Community packages
+
+Things other owners have built on top of the integration's entities. They are
+not part of the integration and we do not support them, but they may save
+you an afternoon.
+
+- **Estimated free chlorine from ORP**
+  ([#14](https://github.com/laboratoryyingong/splashme-home-assistant/issues/14)):
+  a Home Assistant package that turns the ORP reading into a free chlorine
+  figure in ppm, corrected by the results you get back from the pool shop,
+  plus the grams of chlorine the cell made today. It reads SplashMe entities
+  only and writes nothing to the controller. The figure is an estimate, not
+  a measurement: ORP probes drift and the ORP to chlorine relationship varies
+  from pool to pool, so keep testing the water.
 
 ## Troubleshooting
 

@@ -5,7 +5,7 @@ from os import getenv
 from homeassistant.const import Platform
 
 DOMAIN = "splashme"
-MANUFACTURER = "SplashMe"
+MANUFACTURER = "Nymet Innovations Pty Ltd"
 
 DEFAULT_API_BASE_URL = "https://api.splashmepool.com.au"
 API_BASE_URL = getenv("SPLASHME_API_BASE_URL", DEFAULT_API_BASE_URL).rstrip("/")

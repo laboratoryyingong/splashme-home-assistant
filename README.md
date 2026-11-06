@@ -1,8 +1,5 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="images/logo-dark.png">
-    <img src="images/logo-light.png" alt="SplashMe" width="320">
-  </picture>
+  <img src="https://raw.githubusercontent.com/laboratoryyingong/splashme-home-assistant/main/images/logo-light.png" alt="SplashMe" width="320">
 </p>
 
 <h1 align="center">SplashMe for Home Assistant</h1>

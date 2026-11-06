@@ -2,7 +2,7 @@
   "domain": "splashme",
   "name": "SplashMe",
   "codeowners": [
-    "@qszxnp"
+    "@laboratoryyingong"
   ],
   "config_flow": true,
   "dependencies": [

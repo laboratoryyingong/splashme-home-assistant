@@ -2,7 +2,7 @@
   <img src="https://raw.githubusercontent.com/laboratoryyingong/splashme-home-assistant/main/images/logo-light.png" alt="SplashMe" width="320">
 </p>
 
-<h1 align="center">SplashMe for Home Assistant</h1>
+<h1 align="center">SplashMe Pool Systems</h1>
 
 <p align="center"><strong>Smart. Simple. Connected.</strong></p>
 

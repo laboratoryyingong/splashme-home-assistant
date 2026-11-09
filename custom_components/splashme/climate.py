@@ -107,6 +107,11 @@ class SplashMeLanClimate(SplashMeLanEntity, ClimateEntity):
         | ClimateEntityFeature.TURN_ON
         | ClimateEntityFeature.TURN_OFF
     )
+    # HA 2026.11 renamed the temperature members to native_*; it serves the
+    # native ones when both are provided and logs a deprecation when only the
+    # old ones are. Older HA (minimum 2025.2) only knows the old names, so
+    # both are kept until the minimum version reaches 2026.11.
+    _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_target_temperature_step = 1
     _attr_min_temp = HEATING_TARGET_MIN
@@ -155,17 +160,27 @@ class SplashMeLanClimate(SplashMeLanEntity, ClimateEntity):
         return HVACAction.HEATING if heating(self.coordinator.data, self._kind) else HVACAction.IDLE
 
     @property
-    def current_temperature(self) -> float | None:
+    def native_current_temperature(self) -> float | None:
         """The last settled reading taken while this body was circulating."""
         return self._current
 
     @property
-    def target_temperature(self) -> float | None:
+    def current_temperature(self) -> float | None:
+        """Pre-2026.11 name of native_current_temperature."""
+        return self.native_current_temperature
+
+    @property
+    def native_target_temperature(self) -> float | None:
         """Return the target from the config section."""
         config = self.coordinator.data.config
         if config is None:
             return None
         return float(config.desired_water_temp if self._kind == "pool" else config.spa_desired_temp)
+
+    @property
+    def target_temperature(self) -> float | None:
+        """Pre-2026.11 name of native_target_temperature."""
+        return self.native_target_temperature
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """Write the new target, and the mode when one is given with it."""

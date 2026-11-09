@@ -667,8 +667,18 @@ class SplashMeLanCoordinator(DataUpdateCoordinator[SplashMeLanData]):
         await self._async_refresh_schedules()
 
     async def async_update_schedule(self, index: int, fields: pv2.ScheduleFields) -> None:
-        """Replace a schedule's definition."""
+        """Replace a schedule's definition.
+
+        Firmware up to 2.5.48 stores an UPDATE with the enabled flag cleared
+        (the app's cloud path re-enables it in the same command; the LAN
+        action did not), so re-enable it here when it was enabled, or the
+        pump stops at the next tick and stays off (issue #26). Newer firmware
+        enables the record itself; the extra ENABLE is then a no-op.
+        """
+        current = self.data.schedule_by_index(index) if self.data is not None else None
         await self._async_action("schedule", pv2.encode_schedule_update(index, fields))
+        if current is not None and current.enabled:
+            await self._async_action("schedule", pv2.encode_schedule_enable(index, True))
         await self._async_refresh_schedules()
 
     async def async_delete_schedule(self, index: int) -> None:

@@ -91,7 +91,8 @@ def _lan_schedule_fields(
         start_min=call.data["start_time"],
         end_min=call.data["end_time"],
         week_day=week_day,
-        name=call.data.get("schedule_name", current.name if current else ""),
+        # The schema defaults schedule_name to "", so an empty name means "keep".
+        name=call.data.get("schedule_name") or (current.name if current else ""),
     )
 
 

@@ -181,7 +181,8 @@ async def _async_setup_lan_numbers(hass, entry, async_add_entities) -> None:
     """Chemistry setpoints, heating targets, plus the pump speed slider for variable speed pumps."""
     coordinator: SplashMeLanCoordinator = entry.runtime_data.coordinator
     async_add_entities(
-        SplashMeLanSettingsNumber(coordinator, entry, spec) for spec in NUMBER_SPECS
+        [SplashMeLanSettingsNumber(coordinator, entry, spec) for spec in NUMBER_SPECS]
+        + [SplashMeLanPumpTimerNumber(coordinator, entry)]
     )
 
     # One target temperature per body of water that has something to heat it.
@@ -257,6 +258,56 @@ class SplashMeLanSettingsNumber(SplashMeLanEntity, NumberEntity):
             await self.coordinator.async_update_ph_settings(changes)
         else:
             await self.coordinator.async_update_chlorine_settings(changes)
+
+
+PUMP_TIMER_MAX_MINUTES = 360  # firmware caps a slot timer at 6 h
+
+
+class SplashMeLanPumpTimerNumber(SplashMeLanEntity, NumberEntity):
+    """Run timer for the filter pump's manual ON (minutes, 0 = off).
+
+    With a timer set, every manual ON of the pump (app, HA or button) runs for
+    that long, then the override clears and the pump goes back to its
+    schedule: a fail-safe for HA-started runs (issue #20). Same setting as
+    the app's equipment settings > pump > Timer.
+    """
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_mode = NumberMode.BOX
+    _attr_native_unit_of_measurement = "min"
+    _attr_device_class = NumberDeviceClass.DURATION
+    _attr_native_min_value = 0
+    _attr_native_max_value = PUMP_TIMER_MAX_MINUTES
+    _attr_native_step = 1
+    _attr_icon = "mdi:timer-cog-outline"
+
+    def __init__(self, coordinator, entry) -> None:
+        """Initialize the number."""
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{self.unique_id_base}_pump_run_timer"
+        self._attr_name = "Pump Run Timer"
+
+    def _pump(self):
+        data = self.coordinator.data
+        return data.main_pump if data is not None else None
+
+    @property
+    def available(self) -> bool:
+        """Needs a pump slot and the timer table from the device."""
+        pump = self._pump()
+        return super().available and pump is not None and pump.timer_duration_sec is not None
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the configured duration in minutes (0 when the timer is off)."""
+        pump = self._pump()
+        if pump is None or pump.timer_duration_sec is None:
+            return None
+        return pump.timer_duration_sec / 60
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Write the duration; 0 switches the timer off."""
+        await self.coordinator.async_set_aux_timer(self._pump().slot, round(value * 60))
 
 
 class SplashMeLanTargetTempNumber(SplashMeLanEntity, NumberEntity):

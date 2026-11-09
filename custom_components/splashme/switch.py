@@ -504,6 +504,7 @@ class SplashMeLanAuxSwitch(SplashMeLanEntity, SwitchEntity):
             "mode": _aux_mode_label(aux.mode),
             "manual_override": aux.trump,
             "timer_remaining_seconds": aux.timer_remain_sec,
+            "timer_duration_seconds": aux.timer_duration_sec,
             # Cleaners, ioniser, ozone and UV: the firmware starts the pump for
             # them and stops them when flow is lost.
             "runs_with_pump": aux.is_pump_linked,

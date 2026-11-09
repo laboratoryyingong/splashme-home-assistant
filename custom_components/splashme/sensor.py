@@ -1,5 +1,6 @@
 """Sensor entities for SplashMe."""
 
+from datetime import datetime
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -12,6 +13,7 @@ from homeassistant.components.sensor import (
 from homeassistant.const import UnitOfTemperature, UnitOfTime
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from . import SplashMeConfigEntry, is_lan_entry
 from . import pv2
@@ -113,7 +115,11 @@ def _ml_to_l(value: Any) -> float | None:
 
 
 def _pump_mode_label(value: Any) -> str | None:
-    """Map main_pump_status (0 off / 1-20 schedule# / 99 manual) to a label."""
+    """Map main_pump_status (0 off / 1-20 schedule / 99 manual) to a label.
+
+    The firmware's 1-20 is the number of the first main-pump schedule, not
+    the one that is running (issue #20), so no number is shown.
+    """
     if value is None:
         return None
     mode = int(value)
@@ -121,7 +127,7 @@ def _pump_mode_label(value: Any) -> str | None:
         return "Off"
     if mode == 99:
         return "Manual"
-    return f"Schedule {mode}"
+    return "Schedule"
 
 
 TEMPERATURE_SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
@@ -257,12 +263,15 @@ class HoldsLastReading(RestoreSensor):
     """
 
     _held: Any = None
+    _held_at: datetime | None = None
 
     async def async_added_to_hass(self) -> None:
         """Restore the held reading, then take the live one if it is valid."""
         await super().async_added_to_hass()
         if (last := await self.async_get_last_sensor_data()) is not None:
             self._held = last.native_value
+            if (state := await self.async_get_last_state()) is not None:
+                self._held_at = dt_util.parse_datetime(state.attributes.get("last_reading") or "")
         self._hold()
 
     @callback
@@ -273,11 +282,17 @@ class HoldsLastReading(RestoreSensor):
     def _hold(self) -> None:
         if (value := super().native_value) is not None:
             self._held = value
+            self._held_at = dt_util.utcnow()
 
     @property
     def native_value(self) -> Any:
         """Return the latest valid reading."""
         return self._held
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """When the shown reading was taken, so a held value can be aged (issue #20)."""
+        return {"last_reading": self._held_at.isoformat() if self._held_at else None}
 
 
 class SplashMeValueSensor(SplashMeDeviceEntity, SensorEntity):

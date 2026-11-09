@@ -43,7 +43,12 @@ home.
 - **Water chemistry**: pH, ORP, water and ambient temperature, pressure,
   doses today, drum volumes and chemical remaining, desired pH / ORP setpoints.
 - **Pump**: on/off, speed, mode, start-up status (starting, priming with a
-  countdown), flow rate, brand.
+  countdown), flow rate, brand, and a **Pump Run Timer** setting: with it set,
+  a manual start (from the app, Home Assistant or a button) runs for that long
+  and then hands the pump back to its schedule.
+- **Held readings**: pH, ORP and water temperature are only valid with flow,
+  so they keep the last good value while the pump is off; each carries a
+  `last_reading` attribute with the time it was taken.
 - **Heating**: a thermostat for the pool and one for the spa (**Pool
   Heating**, **Spa Heating**) when something can heat them. Heat / off picks
   whether that heater (or solar, when that is all it has) may be used, and a

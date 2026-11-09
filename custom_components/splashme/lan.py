@@ -218,6 +218,7 @@ class SplashMeLanAux:
     trump: bool
     timer_remain_sec: int | None
     is_virtual: bool = False  # no relay behind it (RS485 ozone slot)
+    timer_duration_sec: int | None = None  # configured run timer (aux_assign_get), 0 = off
 
     @property
     def is_on(self) -> bool:
@@ -281,6 +282,7 @@ class SplashMeLanData:
     ph_settings: dict[str, Any] | None = None
     chlorine_settings: dict[str, Any] | None = None
     lights: dict[str, Any] | None = None  # get_pool_light_switch_mode `d`
+    aux_timers: tuple[int, ...] = ()  # aux_assign_get `aux_timer`: run timer seconds per slot, 0 = off
 
     def _light_field(self, slot: int, field: str) -> int | None:
         aux = self.aux_by_slot(slot)
@@ -316,6 +318,7 @@ class SplashMeLanData:
                 trump=slot in trump,
                 timer_remain_sec=remain.get(slot),
                 is_virtual=four_boards and slot == pv2.ECOCLEAR_VIRTUAL_SLOT,
+                timer_duration_sec=self.aux_timers[slot] if slot < len(self.aux_timers) else None,
             )
             for slot, type_code in enumerate(self.config.aux_type)
         )
@@ -573,6 +576,7 @@ class SplashMeLanCoordinator(DataUpdateCoordinator[SplashMeLanData]):
             ph_settings=await self.client.async_query_json("get_ph_settings"),
             chlorine_settings=await self.client.async_query_json("get_chlorine_settings"),
             lights=await self.client.async_query_json("get_pool_light_switch_mode"),
+            aux_timers=_aux_timers(await self.client.async_query_json("aux_assign_get")),
         )
 
     def _apply_frame(self, frame: pv2.Frame | None) -> None:
@@ -655,6 +659,18 @@ class SplashMeLanCoordinator(DataUpdateCoordinator[SplashMeLanData]):
             return
         schedules = pv2.decode_schedules(await self.client.async_query("schedules"))
         self.async_set_updated_data(replace(self.data, schedules=schedules))
+
+    async def async_set_aux_timer(self, slot: int, seconds: int) -> None:
+        """Set a slot's run timer (0 switches it off): every manual ON then runs
+        for that long before the override clears and the slot returns to its
+        schedule. aux_assign_set with only aux_num + aux_timer changes nothing else."""
+        body = json.dumps({"aux_num": slot, "aux_timer": int(seconds)}).encode()
+        await self._async_action("cmd", pv2.encode_cmd("aux_assign_set", body))
+        try:
+            timers = _aux_timers(await self.client.async_query_json("aux_assign_get"))
+        except (ClientError, TimeoutError) as err:
+            raise LanError(f"Device unreachable after aux_assign_set: {err}") from err
+        self.async_set_updated_data(replace(self.data, aux_timers=timers))
 
     async def async_set_schedule_enabled(self, index: int, enabled: bool) -> None:
         """Enable or disable a schedule."""
@@ -754,6 +770,12 @@ class SplashMeLanCoordinator(DataUpdateCoordinator[SplashMeLanData]):
             "set_chlorine_settings", {"reset_chlorine_volume": False, **changes}
         )
         self.async_set_updated_data(replace(self.data, chlorine_settings=settings))
+
+
+def _aux_timers(aux_assign: dict[str, Any] | None) -> tuple[int, ...]:
+    """Per-slot run timer seconds from the aux_assign_get payload (0 = off)."""
+    values = (aux_assign or {}).get("aux_timer") or ()
+    return tuple(int(v or 0) for v in values)
 
 
 def is_read_only(entry: ConfigEntry) -> bool:
